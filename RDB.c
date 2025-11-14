@@ -161,7 +161,7 @@ int kvs_array_load(char *filename,kvs_array_t *inst){
 int kvs_rbtree_save(char* filename, rbtree *T) {
     char tmpfile[256];
     pid_t pid = getpid();
-    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp.%d",filename,pid);
+    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp",filename);
 
     FILE *fp = fopen(tmpfile, "wb");
     if (!fp) {
@@ -359,6 +359,7 @@ int kvs_rdb_broadcast_all() {
     printf("start rdb broadcast all\n");
 #if ENABLE_ARRAY
     for (int i = 0; i < global_array.total; i++) {
+        printf("i:%d\n",i);
         kvs_array_item_t *p = &global_array.table[i];
         if (p->key == NULL || p->value == NULL) continue;
         char *msg=kvs_malloc(BUFFER_LENGTH);
@@ -371,8 +372,8 @@ int kvs_rdb_broadcast_all() {
         //printf("send:%s\n",msg);
         //int n = snprintf(msg, BUFFER_LENGTH, "SET %s %s\r\n", p->key, p->value);
         //proactor_broadcast(msg, n);
-        kvs_sync_msg(msg,n);
- 
+        int res=kvs_sync_msg(msg,n);
+        if(res<0) printf("send failed\n");
     }
     printf("[rdb_broadcast] sent %d array kvs\n", global_array.total);
 #endif
@@ -396,7 +397,8 @@ int kvs_rdb_broadcast_all() {
             tokens[2]=current->key;
             tokens[3]=current->value;
             int n=kvs_join_tokens(tokens,4,msg2);
-            kvs_sync_msg(msg2,n);
+            int res=kvs_sync_msg(msg2,n);
+            if(res<0) printf("send failed\n");
             count++;
         }
         current = current->right;

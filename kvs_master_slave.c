@@ -95,7 +95,9 @@ int kvs_sync_msg(char* msg,int len){
         char result[1024]={0};
         int res=recv(fd,result,1024,0);
         if(strcmp(result,"SYNCC completed\r\n")==0){
-            //printf("SYNCC completed\r\n");
+            printf("SYNCC completed\r\n");
+        }else{
+            return -1;
         }
     }      
     return 0;
