@@ -203,17 +203,9 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
+			int n=kvs_join_tokens(send_token,4,send_buffer);
 			//printf("prepare to send:%s %s %s\n",send_token[1],send_token[2],send_token[3]);
-
-			
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO){
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-}
+			kvs_sync_msg(send_buffer,n);
 			//if(ret==-1) printf("send failed %d\n",ret);
 #endif
 			length = sprintf(response, "OK\r\n");
@@ -244,14 +236,8 @@ if (ENABLE_AOF){
 }            
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -268,14 +254,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -303,14 +283,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -337,14 +311,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -361,14 +329,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -395,14 +357,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -429,14 +385,8 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			int n=kvs_join_tokens(send_token,4,send_buffer);
+			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -454,13 +404,7 @@ if (ENABLE_AOF){
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
 			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			kvs_sync_msg(send_buffer,strlen(send_buffer));
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
@@ -496,13 +440,7 @@ if (ENABLE_AOF){
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
 			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			kvs_sync_msg(send_buffer,strlen(send_buffer));
 #endif
             length = sprintf(response, "OK\r\n");
         }
@@ -540,13 +478,7 @@ if (ENABLE_AOF){
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
 			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			 ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			kvs_sync_msg(send_buffer,strlen(send_buffer));
 #endif
             length = sprintf(response, "OK\r\n");
         }
@@ -568,13 +500,7 @@ if (ENABLE_AOF){
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
 			kvs_join_tokens(send_token,4,send_buffer);
-if (NETWORK_SELECT == NETWORK_REACTOR)
-			ret=reactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_PROACTOR)
-			ret=proactor_broadcast(send_buffer,strlen(send_buffer));
-else if (NETWORK_SELECT == NETWORK_NTYCO)
-			ret=ntyco_broadcast(send_buffer,strlen(send_buffer));
-
+			kvs_sync_msg(send_buffer,strlen(send_buffer));
 #endif
             length = sprintf(response, "OK\r\n");
         }
