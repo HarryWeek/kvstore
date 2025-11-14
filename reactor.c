@@ -240,14 +240,14 @@ int recv_cb(int fd) {
 		if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
         	close(fd);
     	}
-    	return;
+    	return -1;
 	}
 	conn_list[fd].rlength += count;
 	int len = conn_list[fd].rlength;
 	char *buf = conn_list[fd].rbuffer;
 	int msg_len=0;
 	for(int i=len-1;i>=0;i--){
-		if(buf+i=='\0'){
+		if(*(buf+i)=='\0'){
 			msg_len=i;
 		}
 	}
@@ -257,6 +257,9 @@ int recv_cb(int fd) {
 		memmove(buf,buf+msg_len,len-msg_len);
 		conn_list[fd].rlength=len-msg_len;
 	}
+	set_event(fd, EPOLLOUT, 0);
+
+	return msg_len;
 }
 
 
