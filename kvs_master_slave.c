@@ -88,7 +88,8 @@ int kvs_ms_protocol(char *msg, int len,char*response) {
 int kvs_sync_msg(char* msg,int len){
     if(!msg||len<=0) return -1;
     if(client_count<=0) return -1;
-    for (int i = 0; i < client_count; i++) {
+if(NETWORK_SELECT==NETWORK_REACTOR){
+        for (int i = 0; i < client_count; i++) {
         int fd = client_fds[i]; 
         int ret=send(fd,msg,len,0);
         printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
@@ -99,6 +100,12 @@ int kvs_sync_msg(char* msg,int len){
         }else{
             return -1;
         }
-    }      
+    } 
+}else if(NETWORK_SELECT==NETWORK_PROACTOR){
+    proactor_broadcast(msg,len);
+}else if(NETWORK_SELECT==NETWORK_NTYCO){
+    ntyco_broadcast(msg,len);
+}
+     
     return 0;
 }
