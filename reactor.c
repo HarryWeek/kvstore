@@ -175,7 +175,7 @@ int accept_cb(int fd) {
 	return 0;
 }
 
-
+#if 0
 int recv_cb(int fd) {
 
 	memset(conn_list[fd].rbuffer, 0, BUFFER_LENGTH );
@@ -232,6 +232,33 @@ int recv_cb(int fd) {
 
 	return count;
 }
+#endif
+
+int recv_cb(int fd) {
+	int count=recv(fd,conn_list[fd].rbuffer+conn_list[fd].rlength,BUFFER_LENGTH-conn_list[fd].rlength,0);
+	if(count<=0){
+		if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        	close(fd);
+    	}
+    	return;
+	}
+	conn_list[fd].rlength += count;
+	int len = conn_list[fd].rlength;
+	char *buf = conn_list[fd].rbuffer;
+	int msg_len=0;
+	for(int i=len-1;i>=0;i--){
+		if(buf+i=='\0'){
+			msg_len=i;
+		}
+	}
+	conn_list[fd].rlength=msg_len;
+	kvs_request(&conn_list[fd]);
+	if(msg_len>0){
+		memmove(buf,buf+msg_len,len-msg_len);
+		conn_list[fd].rlength=len-msg_len;
+	}
+}
+
 
 #if 0
 int send_cb(int fd) {
