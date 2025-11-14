@@ -304,6 +304,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
 					}
 #endif
 					//int kvs_protocol(char *msg, int length, char *response);
+					printf("get msg:%s\n",buffer);
 					ret = kvs_handler(buffer, ret, response);
 
 					
