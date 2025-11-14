@@ -102,7 +102,18 @@ if(NETWORK_SELECT==NETWORK_REACTOR){
         }
     } 
 }else if(NETWORK_SELECT==NETWORK_PROACTOR){
-    proactor_broadcast(msg,len);
+        for (int i = 0; i < client_count; i++) {
+        int fd = client_fds[i]; 
+        int ret=send(fd,msg,len,0);
+        printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
+        char result[1024]={0};
+        int res=recv(fd,result,1024,0);
+        if(strcmp(result,"SYNCC completed\r\n")==0){
+            printf("SYNCC completed\r\n");
+        }else{
+            return -1;
+        }
+    } 
 }else if(NETWORK_SELECT==NETWORK_NTYCO){
     ntyco_broadcast(msg,len);
 }

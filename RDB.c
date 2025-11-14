@@ -359,7 +359,7 @@ int kvs_rdb_broadcast_all() {
     printf("start rdb broadcast all\n");
 #if ENABLE_ARRAY
     for (int i = 0; i < global_array.total; i++) {
-        printf("i:%d\n",i);
+       // printf("i:%d\n",i);
         kvs_array_item_t *p = &global_array.table[i];
         if (p->key == NULL || p->value == NULL) continue;
         char *msg=kvs_malloc(BUFFER_LENGTH);
