@@ -157,7 +157,7 @@ int kvs_multi_start(char *msg,int length,char* response,int max_resp_len){
 
             kvs_ms_filter_protocol(tokens,4);
             len=sprintf(response,"SYNCC completed\r\n");
-            len=0;
+            //len=0;
             //response=NULL;
         }else{
             kvs_filter_protocol(tokens, 3, resp);

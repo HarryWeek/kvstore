@@ -4,7 +4,8 @@
 extern kvs_array_t global_array;
 extern kvs_rbtree_t global_rbtree;
 extern kvs_hash_t global_hash;
-
+extern int client_fds[MAX_CLIENTS];
+extern int client_count;
 int kvs_ms_filter_protocol(char **tokens, int count) {
     if (tokens == NULL || count == 0) return -1;
     
@@ -83,3 +84,19 @@ int kvs_ms_protocol(char *msg, int len,char*response) {
     return kvs_ms_filter_protocol(tokens, count);
 }
 #endif
+
+int kvs_sync_msg(char* msg,int len){
+    if(!msg||len<=0) return -1;
+    if(client_count<=0) return -1;
+    for (int i = 0; i < client_count; i++) {
+        int fd = client_fds[i]; 
+        int ret=send(fd,msg,len,0);
+        //printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
+        char result[1024]={0};
+        int res=recv(fd,result,1024,0);
+        if(strcmp(result,"SYNCC completed\r\n")==0){
+            //printf("SYNCC completed\r\n");
+        }
+    }      
+    return 0;
+}

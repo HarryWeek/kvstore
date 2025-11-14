@@ -371,25 +371,8 @@ int kvs_rdb_broadcast_all() {
         //printf("send:%s\n",msg);
         //int n = snprintf(msg, BUFFER_LENGTH, "SET %s %s\r\n", p->key, p->value);
         //proactor_broadcast(msg, n);
-#if (NETWORK_SELECT == NETWORK_REACTOR)
-			//reactor_broadcast(msg,n);
-            extern int client_fds[MAX_CLIENTS];
-            extern int client_count;
-            for (int i = 0; i < client_count; i++) {
-                int fd = client_fds[i]; 
-                int ret=send(fd,msg,n,0);
-                printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
-                char result[1024]={0};
-                int res=recv(fd,result,1024,0);
-                if(strcmp(result,"SYNCC completed\r\n")==0){
-                    printf("SYNCC completed\r\n");
-                }
-            }           
-#elif (NETWORK_SELECT == NETWORK_PROACTOR)
-			proactor_broadcast(msg, n);
-#elif (NETWORK_SELECT == NETWORK_NTYCO)
-			ntyco_broadcast(msg,n);
-#endif
+        kvs_sync_msg(msg,n);
+ 
     }
     printf("[rdb_broadcast] sent %d array kvs\n", global_array.total);
 #endif
@@ -413,16 +396,7 @@ int kvs_rdb_broadcast_all() {
             tokens[2]=current->key;
             tokens[3]=current->value;
             int n=kvs_join_tokens(tokens,4,msg2);
-#if (NETWORK_SELECT == NETWORK_REACTOR)
-			//reactor_broadcast(msg,n);
-            int relen=strlen(reactor_response);
-            memcpy(reactor_response+relen,msg2,strlen(msg2));
-            //printf("re_msg:%s\n",reactor_response);
-#elif (NETWORK_SELECT == NETWORK_PROACTOR)
-			proactor_broadcast(msg2, n);
-#elif (NETWORK_SELECT == NETWORK_NTYCO)
-			ntyco_broadcast(msg2,n);
-#endif
+            kvs_sync_msg(msg2,n);
             count++;
         }
         current = current->right;
@@ -446,16 +420,7 @@ int kvs_rdb_broadcast_all() {
             tokens[2]=node->key;
             tokens[3]=node->value;
             int n=kvs_join_tokens(tokens,4,msg3);
-#if (NETWORK_SELECT == NETWORK_REACTOR)
-			//reactor_broadcast(msg,n);
-            int relen=strlen(reactor_response);
-            memcpy(reactor_response+relen,msg3,strlen(msg3));
-            //printf("re_msg:%s\n",reactor_response);
-#elif (NETWORK_SELECT == NETWORK_PROACTOR)
-			proactor_broadcast(msg3, n);
-#elif (NETWORK_SELECT == NETWORK_NTYCO)
-			ntyco_broadcast(msg3,n);
-#endif
+            kvs_sync_msg(msg3,n);
             node = node->next;
             total++;
         }
