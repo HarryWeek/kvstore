@@ -175,7 +175,7 @@ int accept_cb(int fd) {
 	return 0;
 }
 
-#if 0
+#if 1
 int recv_cb(int fd) {
 
 	memset(conn_list[fd].rbuffer, 0, BUFFER_LENGTH );
@@ -233,7 +233,7 @@ int recv_cb(int fd) {
 	return count;
 }
 #endif
-
+#if 0
 int recv_cb(int fd) {
 	int count=recv(fd,conn_list[fd].rbuffer+conn_list[fd].rlength,BUFFER_LENGTH-conn_list[fd].rlength,0);
 	if(count<=0){
@@ -252,7 +252,15 @@ int recv_cb(int fd) {
 		}
 	}
 	conn_list[fd].rlength=msg_len;
-	kvs_request(&conn_list[fd]);
+#if ENABLE_MS
+	//printf("get msg:%s\n",conn_list[fd].rbuffer);
+	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
+		printf("get SYNC fd:%d\n",fd);
+		add_client_fd(fd);
+	}
+#endif
+	int wlen=kvs_request(&conn_list[fd]);
+	printf("wlen: %drlen: %d\n",wlen,msg_len);
 	if(msg_len>0){
 		memmove(buf,buf+msg_len,len-msg_len);
 		conn_list[fd].rlength=len-msg_len;
@@ -262,7 +270,7 @@ int recv_cb(int fd) {
 	return msg_len;
 }
 
-
+#endif
 #if 0
 int send_cb(int fd) {
 
