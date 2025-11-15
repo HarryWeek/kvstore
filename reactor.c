@@ -287,8 +287,8 @@ int recv_cb(int fd) {
 
 	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
 #if ENABLE_MS
-	//printf("get msg:%s\n",conn_list[fd].rbuffer);
-	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
+	printf("get msg:%s\n",packet);
+	if(strcmp(packet,syncc)==0){
 		printf("get SYNC fd:%d\n",fd);
 		add_client_fd(fd);
 	}
@@ -362,6 +362,7 @@ int send_cb(int fd) {
     }
 
     int sent = send(fd, c->wbuffer, c->wlength, 0);
+	printf("send: %s\n",c->wbuffer);
     if (sent > 0) {
         if (sent < c->wlength) {
             // 还有剩余数据没发完
@@ -415,7 +416,7 @@ int r_init_server(unsigned short port) {
 
 }
 #if 1
-int reactor_broadcast(const char *msg, size_t len) {
+int reactor_broadcast(char *msg, size_t len) {
     if (!msg || len == 0) return -1;
     if (client_count == 0) return -1;
 

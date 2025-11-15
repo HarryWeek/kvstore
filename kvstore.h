@@ -264,7 +264,7 @@ int proactor_broadcast(char *msg, size_t len);
 int proactor_connect(char *master_ip, unsigned short master_port);
 int kvs_ms_filter_protocol(char **tokens, int count);
 int kvs_join_tokens(char *tokens[], int count, char *msg);
-int reactor_broadcast(const char *msg, size_t len);
+int reactor_broadcast(char *msg, size_t len);
 int ntyco_broadcast(const char *msg, size_t len);
 int kvs_sync_msg(char* msg,int len);
 extern struct io_uring ring; 
