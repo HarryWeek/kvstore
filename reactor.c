@@ -249,19 +249,19 @@ int recv_cb(int fd) {
 		// 假设 conn_list[fd].rbuffer 已经分配了足够的空间
 	int count = recv(fd, conn_list[fd].rbuffer + conn_list[fd].rlength, BUFFER_LENGTH - conn_list[fd].rlength, 0);
 
-	if (count == 0) {  // 客户端断开连接
-		// printf("client disconnect: %d\n", fd);
-		close(fd);
-		epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL); // 从 epoll 中删除
+	// if (count == 0) {  // 客户端断开连接
+	// 	// printf("client disconnect: %d\n", fd);
+	// 	close(fd);
+	// 	epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL); // 从 epoll 中删除
 
-		return 0;
-	} else if (count < 0) {  // 接收错误
-		printf("count: %d, errno: %d, %s\n", count, errno, strerror(errno));
-		close(fd);
-		epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
+	// 	return 0;
+	// } else if (count < 0) {  // 接收错误
+	// 	printf("count: %d, errno: %d, %s\n", count, errno, strerror(errno));
+	// 	close(fd);
+	// 	epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
 
-		return 0;
-	}
+	// 	return 0;
+	// }
 
 	// 更新 rlen 为新读取的数据长度
 	conn_list[fd].rlength += count;
