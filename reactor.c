@@ -359,7 +359,7 @@ int send_cb(int fd) {
     }
 
     int sent = send(fd, c->wbuffer, c->wlength, 0);
-	printf("send: %s\n",c->wbuffer);
+	//printf("send: %s\n",c->wbuffer);
     if (sent > 0) {
         if (sent < c->wlength) {
             // 还有剩余数据没发完
