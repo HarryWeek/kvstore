@@ -322,11 +322,21 @@ int proactor_start(unsigned short port, msg_handler handler) {
             //                WRITE
             // ==========================================
             else if (result.event == EVENT_WRITE) {
+                struct connection *conn = NULL;
+                for (int k = 0; k < MAX_CONN; k++) {
+                    if (conn_used[k] && conn_list[k].fd == result.fd) {
+                        conn = &conn_list[k];
+                        break;
+                    }
+                }
+                if (!conn) continue;
 
-                char* buf = get_conn_buffer(result.fd);
-                memset(buf, 0, BUFFER_LENGTH);
-
-                set_event_recv(&ring, result.fd, buf, BUFFER_LENGTH, 0);
+                // 写完不清空 buffer，只继续读
+                set_event_recv(&ring, result.fd,
+                            conn->buffer + conn->rlength,
+                            BUFFER_LENGTH - conn->rlength,
+                            0);
+     
             }
         }
 
