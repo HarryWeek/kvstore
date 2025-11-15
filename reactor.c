@@ -70,7 +70,7 @@ int reactor_connect(char *master_ip, unsigned short conn_port) {
 typedef int (*msg_handler)(char *msg, int length, char *response);
 
 static msg_handler kvs_handler;
-char *syncc="*1\r\n$7\r\nSYNCALL\r\n";
+char *syncc;
 #if 0
 int kvs_request(struct conn *c) {
 	//printf("kvs_request\n");
@@ -595,7 +595,8 @@ int reactor_start(unsigned short port, msg_handler handler) {
 			add_client_fd(master_fd);
 			event_register(master_fd,EPOLLIN);
 			printf("[reactor] Connected to master (fd=%d)\n", master_fd);
-			
+			char *tokens[] = {"SYNCALL"};
+			kvs_join_tokens(tokens,1,syncc);
 			reactor_broadcast(syncc,strlen(syncc));
 		} else {
 			fprintf(stderr, "[reactor] Failed to connect master %s:%d\n", master_ip, port);
