@@ -61,9 +61,9 @@ int kvs_ms_filter_protocol(char **tokens, int count) {
             break;
     }
 
-#if ENABLE_RDB
+if(ENABLE_RDB){
     kvs_rdb_save();
-#endif
+}
     return 0;
 }
 
