@@ -86,7 +86,9 @@ int kvs_ms_protocol(char *msg, int len,char*response) {
 #endif
 extern struct io_uring ring; 
 int kvs_sync_msg(char* msg,int len){
+    //printf("%s %d\n",msg,len);
     if(!msg||len<=0) return -1;
+    //printf("client_count %d\n",client_count);
     if(client_count<=0) return -1;
 if(NETWORK_SELECT==NETWORK_REACTOR){
     reactor_broadcast(msg,len);

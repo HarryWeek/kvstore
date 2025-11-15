@@ -373,7 +373,7 @@ int kvs_rdb_broadcast_all() {
         //int n = snprintf(msg, BUFFER_LENGTH, "SET %s %s\r\n", p->key, p->value);
         //proactor_broadcast(msg, n);
         int res=kvs_sync_msg(msg,n);
-        if(res<0) printf("send failed\n");
+        if(res<0) printf("send failed %d\n",res);
     }
     printf("[rdb_broadcast] sent %d array kvs\n", global_array.total);
 #endif

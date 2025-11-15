@@ -20,7 +20,7 @@
 #define CONNECTION_SIZE			1024 // 1024 * 1024
 
 #define MAX_PORTS			1
-
+char syncc[1024]={0};
 #define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
 int event_register(int fd, int event);
 extern int client_fds[MAX_CLIENTS];
@@ -70,7 +70,7 @@ int reactor_connect(char *master_ip, unsigned short conn_port) {
 typedef int (*msg_handler)(char *msg, int length, char *response);
 
 static msg_handler kvs_handler;
-char *syncc;
+
 #if 0
 int kvs_request(struct conn *c) {
 	//printf("kvs_request\n");
@@ -284,15 +284,15 @@ int recv_cb(int fd) {
 	ws_request(&conn_list[fd]);
 
 #elif ENABLE_KVSTORE
-
-	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
 #if ENABLE_MS
-	printf("get msg:%s\n",packet);
-	if(strcmp(packet,syncc)==0){
+	printf("get msg:%s syncc:%s\n",conn_list[fd].rbuffer,syncc);
+	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
 		printf("get SYNC fd:%d\n",fd);
 		add_client_fd(fd);
 	}
 #endif
+	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
+
 	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
 	//printf("wlen:%d\n",wlen);
 #endif
@@ -417,9 +417,10 @@ int r_init_server(unsigned short port) {
 }
 #if 1
 int reactor_broadcast(char *msg, size_t len) {
+	//printf("%s %d\n",msg,(int)len);
     if (!msg || len == 0) return -1;
     if (client_count == 0) return -1;
-	printf("start reactor_broadcast\n");
+	//printf("start reactor_broadcast\n");
     int send_count = 0;
 
     for (int i = 0; i < client_count; i++) {
@@ -586,7 +587,8 @@ int reactor_start(unsigned short port, msg_handler handler) {
 		set_event(sockfd, EPOLLIN, 1);
 	}
 #if ENABLE_MS
-
+	char *tokens[] = {"SYNCALL"};
+	kvs_join_tokens(tokens,1,syncc);
 	extern char *master_ip;
 	//extern unsigned short master_port;
 	if(kvs_role==ROLE_SLAVE){
@@ -596,8 +598,7 @@ int reactor_start(unsigned short port, msg_handler handler) {
 			add_client_fd(master_fd);
 			event_register(master_fd,EPOLLIN);
 			printf("[reactor] Connected to master (fd=%d)\n", master_fd);
-			char *tokens[] = {"SYNCALL"};
-			kvs_join_tokens(tokens,1,syncc);
+
 			reactor_broadcast(syncc,strlen(syncc));
 		} else {
 			fprintf(stderr, "[reactor] Failed to connect master %s:%d\n", master_ip, port);
