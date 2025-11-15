@@ -52,6 +52,7 @@ int proactor_broadcast(char *msg, size_t len) {
     for (int i = 0; i < client_count; i++) {
         int fd = client_fds[i];
         set_event_send(&ring, fd, msg, len, 0);
+        printf("send: %s\n",msg);
     }
     return client_count;
 }
