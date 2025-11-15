@@ -288,9 +288,9 @@ int recv_cb(int fd) {
 	}
 #endif
 	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
-	printf("get packet:%s\n",packet);
+	//printf("get packet:%s\n",packet);
 	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
-	printf("wlen:%d\n",wlen);
+	//printf("wlen:%d\n",wlen);
 	kvs_free(packet);
 #endif
 

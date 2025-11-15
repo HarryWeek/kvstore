@@ -531,7 +531,8 @@ else if (NETWORK_SELECT == NETWORK_REACTOR)
 		kvs_rdb_broadcast_all();
 else if (NETWORK_SELECT == NETWORK_NTYCO)
 		kvs_rdb_broadcast_all(); 
-
+		memset(response,0,sizeof(response));
+		length=0;
 		break;
 #endif
 	default: 
@@ -541,7 +542,9 @@ else if (NETWORK_SELECT == NETWORK_NTYCO)
 		//assert(0);
 	}
 #if 1
-if(ENABLE_RDB){
+if(ENABLE_RDB&&(cmd==KVS_CMD_SET||cmd==KVS_CMD_MOD||cmd==KVS_CMD_DEL
+			||cmd==KVS_CMD_RSET||cmd==KVS_CMD_RMOD||cmd==KVS_CMD_RDEL
+			||cmd==KVS_CMD_HSET||cmd==KVS_CMD_HMOD||cmd==KVS_CMD_HDEL)){
 	 int rdb_ret = kvs_rdb_save();
         if (rdb_ret != 0) {
             printf("rdb save failed\n");
