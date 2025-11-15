@@ -295,6 +295,7 @@ int recv_cb(int fd) {
 	printf("get msg:%s\n",packet);
 	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
 	//printf("wlen:%d\n",wlen);
+	kvs_free(packet);
 #endif
 
 

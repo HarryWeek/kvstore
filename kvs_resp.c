@@ -164,50 +164,53 @@ int kvs_join_tokens(char *tokens[], int count, char *msg) {
 char* parse_packet(char *msg, int *msg_len, int buffer_size) {
     if (*msg_len <= 0) return NULL;
 
-    // 1️⃣ 将数据追加到缓冲区
     if (*msg_len > buffer_size) {
-        // 如果缓冲区满了，清空
         *msg_len = 0;
         return NULL;
     }
 
-    // 2️⃣ 必须至少有 "#x\r\n" 
-    if (*msg_len < 4) return NULL;
+    int offset = 0;   // 当前解析位置
+    int total_used = 0; // 完整包占用的总长度
 
-    char *p = msg;
+    // 1️⃣ 先遍历所有完整包，计算总长度
+    while (1) {
+        if (*msg_len - offset < 4) break; // 不可能有完整包
 
-    if (p[0] != '#') {
-        // 协议错误（也可以丢弃）
-        *msg_len = 0;
+        if (msg[offset] != '#') {
+            *msg_len = 0; // 协议错误
+            return NULL;
+        }
+
+        // 找 header 的 \r\n
+        char *rn = memmem(msg + offset, *msg_len - offset, "\r\n", 2);
+        if (!rn) break; // 半包
+
+        int header_len = rn - (msg + offset) + 2;
+        int body_len = atoi(msg + offset + 1);
+        int packet_len = header_len + body_len;
+
+        if (*msg_len - offset < packet_len) break; // 半包
+
+        offset += packet_len; // 完整包长度累加
+        total_used = offset;
+    }
+
+    // 没有完整包
+    if (total_used == 0)
         return NULL;
-    }
 
-    // 3️⃣ 查找 \r\n
-    char *rn = memmem(msg, *msg_len, "\r\n", 2);
-    if (!rn) return NULL;  // 半包
+    // 2️⃣ 分配 big full_packet 保存所有完整包
+    char *full_packet = kvs_malloc(total_used + 1);
+    memcpy(full_packet, msg, total_used);
+    full_packet[total_used] = '\0';
 
-    int header_len = rn - msg + 2;
-    int body_len = atoi(msg + 1);
+    // 3️⃣ 缓冲区左移，保留半包
+    int remain = *msg_len - total_used;
+    if (remain > 0)
+        memmove(msg, msg + total_used, remain);
 
-    int total_len = header_len + body_len;
-
-    // 4️⃣ 半包：内容还没收够
-    if (*msg_len < total_len) {
-        return NULL;
-    }
-
-    // 5️⃣ 取出完整包
-    char *full_packet = kvs_malloc(total_len + 1);
-    memcpy(full_packet, msg, total_len);
-    full_packet[total_len] = '\0';
-
-    // 6️⃣ 缓冲区左移，保留未处理的粘包部分
-    int remain = *msg_len - total_len;
-    if (remain > 0) {
-        memmove(msg, msg + total_len, remain);
-    }
     *msg_len = remain;
 
-    // 7️⃣ 返回完整包
-    return full_packet;
+    return full_packet;  // 返回所有完整包
 }
+
