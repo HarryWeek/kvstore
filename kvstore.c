@@ -88,6 +88,7 @@ int kvs_split_token(char *msg, char *tokens[]) {
 
 	return idx;
 }*/
+#if 0
 int max_tokens=4;
 int kvs_split_token(char *msg, char *tokens[]) {
 	 if (!msg || !tokens) return -1;
@@ -161,7 +162,7 @@ int kvs_join_tokens(char *tokens[], int count, char *msg) {
     *p = '\0'; // 结束符
     return p-msg;
 }
-
+#endif
 // SET Key Value
 // tokens[0] : SET
 // tokens[1] : Key

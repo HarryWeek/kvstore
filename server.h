@@ -49,8 +49,7 @@ int ws_response(struct conn *c);
 #endif
 
 #if ENABLE_KVSTORE
-int kvs_request(struct conn *c);
-int kvs_response(struct conn *c);
+
 
 #endif
 

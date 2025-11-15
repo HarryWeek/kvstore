@@ -72,7 +72,8 @@ extern int ntyco_start(unsigned short port, msg_handler handler);
 
 int kvs_filter_protocol(char **tokens, int count, char *response);
 int kvs_split_token(char *msg, char *tokens[]);
-
+int kvs_join_tokens(char *tokens[], int count, char *msg);
+char* parse_packet(char *msg, int *msg_len, int buffer_size); 
 
 #if ENABLE_ARRAY
 
@@ -266,6 +267,9 @@ int kvs_join_tokens(char *tokens[], int count, char *msg);
 int reactor_broadcast(const char *msg, size_t len);
 int ntyco_broadcast(const char *msg, size_t len);
 int kvs_sync_msg(char* msg,int len);
+extern struct io_uring ring; 
+int set_event_recv(struct io_uring *ring, int sockfd,
+				      void *buf, size_t len, int flags);
 #endif
 
 #if ENABLE_DATA

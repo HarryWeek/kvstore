@@ -71,6 +71,7 @@ typedef int (*msg_handler)(char *msg, int length, char *response);
 
 static msg_handler kvs_handler;
 char *syncc="*1\r\n$7\r\nSYNCALL\r\n";
+#if 0
 int kvs_request(struct conn *c) {
 	//printf("kvs_request\n");
 	//c->rlength=strlen
@@ -78,7 +79,16 @@ int kvs_request(struct conn *c) {
 	//printf("c->wlength: %d c->rlength %d c->rbuffer %s\n",c->wlength,c->rlength,c->rbuffer);
 	return c->wlength;
 }
-
+#endif
+#if 1
+int kvs_request(struct conn *c,char *packet,int pac_len) {
+	//printf("kvs_request\n");
+	//c->rlength=strlen
+	c->wlength = kvs_handler(packet, pac_len, c->wbuffer);
+	//printf("c->wlength: %d c->rlength %d c->rbuffer %s\n",c->wlength,c->rlength,c->rbuffer);
+	return c->wlength;
+}	
+#endif
 int kvs_response(struct conn *c) {
 	return 0;
 	
@@ -175,7 +185,7 @@ int accept_cb(int fd) {
 	return 0;
 }
 
-#if 1
+#if 0
 int recv_cb(int fd) {
 
 	memset(conn_list[fd].rbuffer, 0, BUFFER_LENGTH );
@@ -233,25 +243,49 @@ int recv_cb(int fd) {
 	return count;
 }
 #endif
-#if 0
+#if 1
 int recv_cb(int fd) {
-	int count=recv(fd,conn_list[fd].rbuffer+conn_list[fd].rlength,BUFFER_LENGTH-conn_list[fd].rlength,0);
-	if(count<=0){
-		if (count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-        	close(fd);
-    	}
-    	return -1;
+
+		// 假设 conn_list[fd].rbuffer 已经分配了足够的空间
+	int count = recv(fd, conn_list[fd].rbuffer + conn_list[fd].rlength, BUFFER_LENGTH - conn_list[fd].rlength, 0);
+
+	if (count == 0) {  // 客户端断开连接
+		// printf("client disconnect: %d\n", fd);
+		close(fd);
+		epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL); // 从 epoll 中删除
+
+		return 0;
+	} else if (count < 0) {  // 接收错误
+		printf("count: %d, errno: %d, %s\n", count, errno, strerror(errno));
+		close(fd);
+		epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
+
+		return 0;
 	}
+
+	// 更新 rlen 为新读取的数据长度
 	conn_list[fd].rlength += count;
-	int len = conn_list[fd].rlength;
-	char *buf = conn_list[fd].rbuffer;
-	int msg_len=0;
-	for(int i=len-1;i>=0;i--){
-		if(*(buf+i)=='\0'){
-			msg_len=i;
-		}
-	}
-	conn_list[fd].rlength=msg_len;
+
+	//printf("RECV: %s\n", conn_list[fd].rbuffer);
+
+#if 0 // echo
+
+	conn_list[fd].wlength = conn_list[fd].rlength;
+	memcpy(conn_list[fd].wbuffer, conn_list[fd].rbuffer, conn_list[fd].wlength);
+
+	printf("[%d]RECV: %s\n", conn_list[fd].rlength, conn_list[fd].rbuffer);
+
+#elif ENABLE_HTTP
+
+	http_request(&conn_list[fd]);
+
+#elif ENABLE_WEBSOCKET
+
+	ws_request(&conn_list[fd]);
+
+#elif ENABLE_KVSTORE
+
+	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
 #if ENABLE_MS
 	//printf("get msg:%s\n",conn_list[fd].rbuffer);
 	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
@@ -259,15 +293,14 @@ int recv_cb(int fd) {
 		add_client_fd(fd);
 	}
 #endif
-	int wlen=kvs_request(&conn_list[fd]);
-	printf("wlen: %drlen: %d\n",wlen,msg_len);
-	if(msg_len>0){
-		memmove(buf,buf+msg_len,len-msg_len);
-		conn_list[fd].rlength=len-msg_len;
-	}
+	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
+	//printf("wlen:%d\n",wlen);
+#endif
+
+
 	set_event(fd, EPOLLOUT, 0);
 
-	return msg_len;
+	return count;
 }
 
 #endif

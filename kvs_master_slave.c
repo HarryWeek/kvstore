@@ -84,30 +84,19 @@ int kvs_ms_protocol(char *msg, int len,char*response) {
     return kvs_ms_filter_protocol(tokens, count);
 }
 #endif
-
+extern struct io_uring ring; 
 int kvs_sync_msg(char* msg,int len){
     if(!msg||len<=0) return -1;
     if(client_count<=0) return -1;
 if(NETWORK_SELECT==NETWORK_REACTOR){
-        for (int i = 0; i < client_count; i++) {
-        int fd = client_fds[i]; 
-        int ret=send(fd,msg,len,0);
-        printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
-        char result[1024]={0};
-        int res=recv(fd,result,1024,0);
-        if(strcmp(result,"SYNCC completed\r\n")==0){
-            printf("SYNCC completed\r\n");
-        }else{
-            return -1;
-        }
-    } 
+    reactor_broadcast(msg,len);
 }else if(NETWORK_SELECT==NETWORK_PROACTOR){
         for (int i = 0; i < client_count; i++) {
         int fd = client_fds[i]; 
-        int ret=send(fd,msg,len,0);
+        int ret=proactor_broadcast(msg,len);
         printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
         char result[1024]={0};
-        int res=recv(fd,result,1024,0);
+        int res=set_event_recv(&ring,fd,result,1024,0);
         if(strcmp(result,"SYNCC completed\r\n")==0){
             printf("SYNCC completed\r\n");
         }else{
