@@ -419,7 +419,7 @@ int r_init_server(unsigned short port) {
 int reactor_broadcast(char *msg, size_t len) {
     if (!msg || len == 0) return -1;
     if (client_count == 0) return -1;
-
+	printf("start reactor_broadcast\n");
     int send_count = 0;
 
     for (int i = 0; i < client_count; i++) {
@@ -431,7 +431,7 @@ int reactor_broadcast(char *msg, size_t len) {
 
         if (remain <= 1) {
             // 缓冲区满，暂时跳过该客户端
-            //fprintf(stderr, "[reactor_broadcast] Buffer full for fd=%d, skip\n", fd);
+            fprintf(stderr, "[reactor_broadcast] Buffer full for fd=%d, skip\n", fd);
             continue;
         }
 
