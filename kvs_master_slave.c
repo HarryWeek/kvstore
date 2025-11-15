@@ -93,18 +93,8 @@ int kvs_sync_msg(char* msg,int len){
 if(NETWORK_SELECT==NETWORK_REACTOR){
     reactor_broadcast(msg,len);
 }else if(NETWORK_SELECT==NETWORK_PROACTOR){
-        for (int i = 0; i < client_count; i++) {
-        int fd = client_fds[i]; 
-        int ret=proactor_broadcast(msg,len);
-        printf("ret: %d, fd:  %d msg %s",ret,fd,msg);
-        char result[1024]={0};
-        int res=set_event_recv(&ring,fd,result,1024,0);
-        if(strcmp(result,"SYNCC completed\r\n")==0){
-            printf("SYNCC completed\r\n");
-        }else{
-            return -1;
-        }
-    } 
+    proactor_broadcast(msg,len);
+    
 }else if(NETWORK_SELECT==NETWORK_NTYCO){
     ntyco_broadcast(msg,len);
 }
