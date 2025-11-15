@@ -200,7 +200,8 @@ int kvs_rdb_load();
 int kvs_array_load(char *filename,kvs_array_t *inst);
 int kvs_rbtree_save(char*filename,rbtree *T);
 int kvs_rbtree_load(char*filename,rbtree *T);
-
+void *rdb_save_thread(void *arg);
+int start_rdb_save_thread();
 int kvs_hash_save(char* filename,kvs_hash_t *hash);
 
 int kvs_hash_load(char* filename,kvs_hash_t *hash);

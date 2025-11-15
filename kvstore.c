@@ -541,7 +541,7 @@ else if (NETWORK_SELECT == NETWORK_NTYCO)
 		length=0;
 		//assert(0);
 	}
-#if 1
+#if 0
 if(ENABLE_RDB&&(cmd==KVS_CMD_SET||cmd==KVS_CMD_MOD||cmd==KVS_CMD_DEL
 			||cmd==KVS_CMD_RSET||cmd==KVS_CMD_RMOD||cmd==KVS_CMD_RDEL
 			||cmd==KVS_CMD_HSET||cmd==KVS_CMD_HMOD||cmd==KVS_CMD_HDEL)){
@@ -553,32 +553,7 @@ if(ENABLE_RDB&&(cmd==KVS_CMD_SET||cmd==KVS_CMD_MOD||cmd==KVS_CMD_DEL
         }
 }
 #endif
-#if 0
-if (ENABLE_RDB) {
-    pid_t pid = fork();
 
-    if (pid < 0) {
-        // fork失败
-        perror("fork failed");
-    } else if (pid == 0) {
-        // 子进程：执行RDB保存
-        int rdb_ret = kvs_rdb_save();
-        if (rdb_ret != 0) {
-            printf("rdb save failed\n");
-        } else {
-            //printf("rdb save success\n");
-        }
-        //子进程执行完毕后退出，防止影响父进程逻辑
-        _exit(0);
-    } else {
-        // 父进程：不阻塞，异步执行
-        //printf("rdb save started in child process (pid=%d)\n", pid);
-
-        // 等待保存完成
-        // waitpid(pid, NULL, 0);
-    }
-}
-#endif
 	return length;
 }
 
@@ -652,6 +627,11 @@ if (ENABLE_RDB){
     if((kvs_rdb_load())!=0){
         printf("rdb_load failed\n");
     }
+
+	if (ENABLE_RDB) {
+	start_rdb_save_thread();
+	}
+
 }
 
 if (ENABLE_AOF){

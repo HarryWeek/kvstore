@@ -541,3 +541,26 @@ int kvs_rdb_reactor_broadcast_all(char* response) {
 }
 
 #endif
+// 线程函数
+void *rdb_save_thread(void *arg) {
+    while (1) {
+        kvs_rdb_save();
+        //printf("[RDB] save done\n");
+
+        sleep(10);  // 每 10 秒执行一次
+    }
+    return NULL;
+}
+
+// 启动线程
+int start_rdb_save_thread() {
+    pthread_t tid;
+    int ret = pthread_create(&tid, NULL, rdb_save_thread, NULL);
+    if (ret != 0) {
+        perror("pthread_create");
+        return -1;
+    }
+
+    pthread_detach(tid);   // 无需 join，自动回收线程资源
+    return 0;
+}
