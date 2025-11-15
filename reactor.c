@@ -285,14 +285,14 @@ int recv_cb(int fd) {
 
 #elif ENABLE_KVSTORE
 #if ENABLE_MS
-	printf("get msg:%s syncc:%s\n",conn_list[fd].rbuffer,syncc);
+	
 	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
 		printf("get SYNC fd:%d\n",fd);
 		add_client_fd(fd);
 	}
 #endif
 	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
-
+	printf("get msg:%s\n",packet);
 	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
 	//printf("wlen:%d\n",wlen);
 #endif
