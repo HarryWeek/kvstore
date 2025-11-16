@@ -11,7 +11,7 @@
 #define EVENT_WRITE     2
 #define ENTRIES_LENGTH  4096
 #define BUFFER_LENGTH   4096
-
+#define MAX_CONN 1024
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len, char *response);
 
@@ -57,42 +57,7 @@ int proactor_broadcast(char *msg, size_t len) {
     return client_count;
 }
 
-int proactor_connect(char *master_ip, unsigned short conn_port) {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        perror("socket");
-        return -1;
-    }
 
-    struct sockaddr_in serveraddr;
-    memset(&serveraddr, 0, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port = htons(conn_port);
-
-    if (inet_pton(AF_INET, master_ip, &serveraddr.sin_addr) <= 0) {
-        perror("inet_pton");
-        close(sockfd);
-        return -1;
-    }
-
-    if (connect(sockfd, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) < 0) {
-        perror("connect");
-        close(sockfd);
-        return -1;
-    }
-
-    add_client_fd(sockfd);
-
-    static char recv_buf[BUFFER_LENGTH];
-    memset(recv_buf, 0, BUFFER_LENGTH);
-
-    set_event_recv(&ring, sockfd, recv_buf, BUFFER_LENGTH, 0);
-    io_uring_submit(&ring);
-
-    printf("[proactor] Connected to master %s:%d (fd=%d)\n", master_ip, conn_port, sockfd);
-
-    return sockfd;
-}
 #endif
 
 
@@ -100,7 +65,7 @@ int proactor_connect(char *master_ip, unsigned short conn_port) {
 //      ★★★ 每个连接独立 buffer ★★★
 // =======================================================================
 
-#define MAX_CONN 1024
+
 
 struct connection {
     int fd;
@@ -193,7 +158,54 @@ int set_event_accept(struct io_uring *ring, int sockfd,
     return 0;
 }
 
+int proactor_connect(char *master_ip, unsigned short conn_port) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
 
+    struct sockaddr_in serveraddr;
+    memset(&serveraddr, 0, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_port = htons(conn_port);
+
+    if (inet_pton(AF_INET, master_ip, &serveraddr.sin_addr) <= 0) {
+        perror("inet_pton");
+        close(sockfd);
+        return -1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) < 0) {
+        perror("connect");
+        close(sockfd);
+        return -1;
+    }
+
+    add_client_fd(sockfd);
+
+    // static char recv_buf[BUFFER_LENGTH];
+    // memset(recv_buf, 0, BUFFER_LENGTH);
+                    for (int k = 0; k < MAX_CONN; k++) {
+                    if (!conn_used[k]) {
+                        conn_used[k] = 1;
+                        conn_list[k].fd = sockfd;
+                        memset(conn_list[k].buffer, 0, BUFFER_LENGTH);
+                        conn_list[k].rlength=0;
+                        break;
+                    }
+                }
+                // =============================
+
+                char* buf = get_conn_buffer(sockfd);
+                set_event_recv(&ring, sockfd, buf, BUFFER_LENGTH, 0);
+    set_event_recv(&ring, sockfd, buf, BUFFER_LENGTH, 0);
+    io_uring_submit(&ring);
+
+    printf("[proactor] Connected to master %s:%d (fd=%d)\n", master_ip, conn_port, sockfd);
+
+    return sockfd;
+}
 // =======================================================================
 //                           主事件循环
 // =======================================================================
