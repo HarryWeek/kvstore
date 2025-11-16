@@ -325,11 +325,14 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 
 #endif
                 printf("get msg:%s rlen: %d\n",buf,*rlen);
-                char *packet=parse_packet(buf,rlen,BUFFER_LENGTH);
-                printf("get packet:%s\nrlennext:%d\n",packet,*rlen);
-                ret = kvs_handler(packet, ret, response);
+                while(*rlen!=0){
+                    char *packet=parse_packet(buf,rlen,BUFFER_LENGTH);
+                    printf("get packet:%s\nrlennext:%d\n",packet,*rlen);
+                    ret = kvs_handler(packet, ret, response);
 
-                set_event_send(&ring, result.fd, response, ret, 0);
+                    set_event_send(&ring, result.fd, response, ret, 0);
+                }
+
             }
 
             // ==========================================
