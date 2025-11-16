@@ -55,13 +55,14 @@ int kvs_split_token(char *msg, char *tokens[]){
 int kvs_join_tokens(char *tokens[], int count, char *msg) {
     if (!tokens || !msg || count <= 0) return -1;
 
-    char resp_buf[8192];
+    char resp_buf[4096];
     char *p = resp_buf;
 
     // 先写 RESP（不含表头）
     p += sprintf(p, "*%d\r\n", count);
 
     for (int i = 0; i < count; i++) {
+        if(!tokens[i]) continue;
         int len = strlen(tokens[i]);
         p += sprintf(p, "$%d\r\n", len);
         memcpy(p, tokens[i], len);

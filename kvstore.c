@@ -229,6 +229,7 @@ if (ENABLE_AOF){
 
 	case KVS_CMD_DEL:
 		ret = kvs_array_del(&global_array ,key);
+		
 		if (ret < 0) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
@@ -239,6 +240,7 @@ if (ENABLE_AOF){
 			char send_buffer[BUFFER_LENGTH];
 			int n=kvs_join_tokens(send_token,4,send_buffer);
 			kvs_sync_msg(send_buffer,n);
+			printf("del ret:%d\n",ret);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {

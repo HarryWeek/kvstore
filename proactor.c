@@ -119,10 +119,10 @@ static char* get_conn_buffer(int fd) {
     }
     return NULL;
 }
-int get_conn_rlen(int fd){
+int *get_conn_rlen(int fd){
     for(int i=0;i<MAX_CONN;i++){
         if(conn_used[i]&&conn_list[i].fd==fd){
-            return conn_list[i].rlength;
+            return &conn_list[i].rlength;
         }
     }
     return 0;
@@ -235,6 +235,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
         int master_fd = proactor_connect(master_ip, port);
 
         if (master_fd > 0) {
+            printf("add fd %d\n",master_fd);
             add_client_fd(master_fd);
             kvs_sync_msg(syncc, strlen(syncc));
         }
@@ -302,7 +303,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
                 char* buf = get_conn_buffer(result.fd);
                 buf[ret] = '\0';
-                int rlen=strlen(buf);
+                int *rlen=get_conn_rlen(result.fd);
+                *rlen=ret;
 #if ENABLE_MS
                 if (strcmp(buf, syncc) == 0) {
                     printf("get SYNC fd:%d\n",result.fd);
@@ -310,9 +312,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 }
                 
 #endif
-                printf("get msg:%s rlen: %d\n",buf,rlen);
-                char *packet=parse_packet(buf,&rlen,BUFFER_LENGTH);
-                printf("get packet:%s\n",packet);
+                printf("get msg:%s rlen: %d\n",buf,*rlen);
+                char *packet=parse_packet(buf,rlen,BUFFER_LENGTH);
+                printf("get packet:%s\nrlennext:%d\n",packet,*rlen);
                 ret = kvs_handler(packet, ret, response);
 
                 set_event_send(&ring, result.fd, response, ret, 0);
@@ -330,7 +332,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     }
                 }
                 if (!conn) continue;
-
+                //printf("fd:%d\n",result.fd);
                 // 写完不清空 buffer，只继续读
                 set_event_recv(&ring, result.fd,
                             conn->buffer + conn->rlength,
