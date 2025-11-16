@@ -199,7 +199,7 @@ int proactor_connect(char *master_ip, unsigned short conn_port) {
 
                 char* buf = get_conn_buffer(sockfd);
                 set_event_recv(&ring, sockfd, buf, BUFFER_LENGTH, 0);
-    set_event_recv(&ring, sockfd, buf, BUFFER_LENGTH, 0);
+    //set_event_recv(&ring, sockfd, buf, BUFFER_LENGTH, 0);
     io_uring_submit(&ring);
 
     printf("[proactor] Connected to master %s:%d (fd=%d)\n", master_ip, conn_port, sockfd);
@@ -314,9 +314,19 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 }
 
                 char* buf = get_conn_buffer(result.fd);
-                buf[ret] = '\0';
                 int *rlen=get_conn_rlen(result.fd);
-                *rlen=ret;
+                if (*rlen + ret > BUFFER_LENGTH) {
+                    // 缓冲区满了（极少），清空避免崩溃
+                    *rlen = 0;
+                }                
+                //memcpy(buf + *rlen, buf, ret);
+                *rlen += ret;
+                buf[*rlen] = '\0'; 
+                // 方便调试（不破坏 buffer）
+                char tmp[BUFFER_LENGTH+1];
+                memcpy(tmp, buf, *rlen);
+                tmp[*rlen] = '\0';
+                printf("get msg:%s rlen:%d\n", tmp, *rlen);
 #if ENABLE_MS
                 if (strcmp(buf, syncc) == 0) {
                     printf("get SYNC fd:%d\n",result.fd);
@@ -324,14 +334,14 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 }
                 
 #endif
-                printf("get msg:%s rlen: %d\n",buf,*rlen);
-                while(*rlen!=0){
+                //printf("get msg:%s rlen: %d\n",buf,*rlen);
+
                     char *packet=parse_packet(buf,rlen,BUFFER_LENGTH);
                     printf("get packet:%s\nrlennext:%d\n",packet,*rlen);
-                    ret = kvs_handler(packet, ret, response);
+                    ret = kvs_handler(packet, strlen(packet), response);
 
                     set_event_send(&ring, result.fd, response, ret, 0);
-                }
+                
 
             }
 
