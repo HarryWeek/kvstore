@@ -11,8 +11,8 @@
 #define EVENT_ACCEPT   	0
 #define EVENT_READ		1
 #define EVENT_WRITE		2
-#define ENTRIES_LENGTH		128
-#define BUFFER_LENGTH		128
+#define ENTRIES_LENGTH		4096
+#define BUFFER_LENGTH		4096
 #define MAX_CONN 65535
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
