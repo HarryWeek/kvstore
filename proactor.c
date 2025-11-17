@@ -404,17 +404,17 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     }
 #endif
 
-                    printf("get msg:%s\n", conn2->rbuffer);
+                    //printf("get msg:%s\n", conn2->rbuffer);
                     // 如果缓冲区不以 '#' 开头，打印十六进制帮助诊断（协议应以 # 开头）
-                    if (conn2->rlength > 0 && conn2->rbuffer[0] != '#') {
-                        fprintf(stderr, "[proactor] protocol error: buffer does not start with '#', fd=%d, rlength=%d\n", result.fd, conn2->rlength);
-                        // 打印前 64 字节的 hex 视图
-                        int dump = conn2->rlength < 64 ? conn2->rlength : 64;
-                        for (int z = 0; z < dump; z++) {
-                            fprintf(stderr, "%02X ", (unsigned char)conn2->rbuffer[z]);
-                        }
-                        fprintf(stderr, "\n");
-                    }
+                    // if (conn2->rlength > 0 && conn2->rbuffer[0] != '#') {
+                    //     fprintf(stderr, "[proactor] protocol error: buffer does not start with '#', fd=%d, rlength=%d\n", result.fd, conn2->rlength);
+                    //     // 打印前 64 字节的 hex 视图
+                    //     int dump = conn2->rlength < 64 ? conn2->rlength : 64;
+                    //     for (int z = 0; z < dump; z++) {
+                    //         fprintf(stderr, "%02X ", (unsigned char)conn2->rbuffer[z]);
+                    //     }
+                    //     fprintf(stderr, "\n");
+                    // }
 
                     char *packet = parse_packet(conn2->rbuffer, &conn2->rlength, BUFFER_LENGTH);
                     if (!packet) {

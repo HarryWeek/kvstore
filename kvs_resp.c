@@ -172,7 +172,7 @@ char* parse_packet(char *msg, int *msg_len, int buffer_size) {
 
         if (msg[offset] != '#') {
             *msg_len = 0;
-            printf("协议错误 \n");
+            //printf("协议错误 \n");
             return NULL;
         }
 
