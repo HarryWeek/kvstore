@@ -161,57 +161,114 @@ int kvs_join_tokens(char *tokens[], int count, char *msg) {
     return p-msg;
 }
 #endif
-
+#if 1
 char* parse_packet(char *msg, int *msg_len, int buffer_size) {
     if (*msg_len <= 0) return NULL;
+    int offset = 0;
+    int total_used = 0;
 
-    if (*msg_len > buffer_size) {
-        *msg_len = 0;
-        return NULL;
-    }
-
-    int offset = 0;   // 当前解析位置
-    int total_used = 0; // 完整包占用的总长度
-
-    // 1️⃣ 先遍历所有完整包，计算总长度
     while (1) {
-        if (*msg_len - offset < 4) break; // 不可能有完整包
+        if (*msg_len - offset < 4) break;
 
         if (msg[offset] != '#') {
-            *msg_len = 0; // 协议错误
+            *msg_len = 0;
+            printf("协议错误 \n");
             return NULL;
         }
 
-        // 找 header 的 \r\n
-        char *rn = memmem(msg + offset, *msg_len - offset, "\r\n", 2);
-        if (!rn) break; // 半包
+        // 限制 header 查找范围（避免匹配 body 内的 CRLF）
+        int search_len = (*msg_len - offset > 32) ? 32 : (*msg_len - offset);
+        char *rn = memmem(msg + offset, search_len, "\r\n", 2);
+        if (!rn) break;
 
         int header_len = rn - (msg + offset) + 2;
         int body_len = atoi(msg + offset + 1);
+
+        if (body_len < 0 || body_len > buffer_size) {
+            *msg_len = 0;
+            printf("body 长度错误\n");
+            return NULL;
+        }
+
         int packet_len = header_len + body_len;
+        if (*msg_len - offset < packet_len) break;
 
-        if (*msg_len - offset < packet_len) break; // 半包
-
-        offset += packet_len; // 完整包长度累加
+        offset += packet_len;
         total_used = offset;
     }
 
-    // 没有完整包
     if (total_used == 0)
         return NULL;
 
-    // 2️⃣ 分配 big full_packet 保存所有完整包
     char *full_packet = kvs_malloc(total_used + 1);
     memcpy(full_packet, msg, total_used);
     full_packet[total_used] = '\0';
 
-    // 3️⃣ 缓冲区左移，保留半包
     int remain = *msg_len - total_used;
-    if (remain > 0)
+    if (remain > 0) {
         memmove(msg, msg + total_used, remain);
-
+        msg[remain] = '\0';
+    } else {
+        msg[0] = '\0';
+    }
     *msg_len = remain;
-
-    return full_packet;  // 返回所有完整包
+    return full_packet;
 }
 
+#endif
+#if 0
+char* parse_packet(char *msg, int *msg_len, int buffer_size) {
+    if (*msg_len <= 0) return NULL;
+    //printf("msg: %s",msg);
+    int offset = 0;
+    int total_used = 0;
+
+    while (1) {
+        if (*msg_len - offset < 4) break;
+
+        if (msg[offset] != '#') {
+            *msg_len = 0;
+            //printf("协议错误 %s\n",msg);
+            return NULL;
+        }
+
+        // 限制 header 查找范围（避免匹配 body 内的 CRLF）
+        int search_len = (*msg_len - offset > 32) ? 32 : (*msg_len - offset);
+        char *rn = memmem(msg + offset, search_len, "\r\n", 2);
+        if (!rn) break;
+
+        int header_len = rn - (msg + offset) + 2;
+        int body_len = atoi(msg + offset + 1);
+
+        if (body_len < 0 || body_len > buffer_size) {
+            *msg_len = 0;
+            printf("body 长度错误\n");
+            return NULL;
+        }
+
+        int packet_len = header_len + body_len;
+        if (*msg_len - offset < packet_len) break;
+
+        offset += packet_len;
+        total_used = offset;
+    }
+
+    if (total_used == 0)
+        return NULL;
+
+    char *full_packet = kvs_malloc(total_used + 1);
+    memcpy(full_packet, msg, total_used);
+    full_packet[total_used] = '\0';
+
+    int remain = *msg_len - total_used;
+    if (remain > 0) {
+        memmove(msg, msg + total_used, remain);
+        msg[remain] = '\0';
+    } else {
+        msg[0] = '\0';
+    }
+    printf("remain:%d %s \n",remain,msg);
+    *msg_len = remain;
+    return full_packet;
+}
+#endif
