@@ -5,7 +5,7 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 
-#define BUFFER_LENGTH		1024*1024/2
+#define BUFFER_LENGTH		4096
 
 #define ENABLE_HTTP			0
 #define ENABLE_WEBSOCKET	0
