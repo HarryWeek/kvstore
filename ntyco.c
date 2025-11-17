@@ -50,19 +50,21 @@ void server_reader(void *arg) {
 			//printf("syncc:%s\n", syncc);
 			if (rlength == (int)strlen(syncc) && memcmp(rbuffer, syncc, rlength) == 0) {
 				printf("get SYNC fd:%d\n", fd);
+				printf("get msg:%.*s\n", rlength, rbuffer);
 				add_client_fd(fd);
 				// consume the sync message
-				rlength = 0;
+				//rlength = 0;
 				//continue;
 			}
-			printf("get msg:%.*s\n", rlength, rbuffer);
+			
 			// 处理可能有多个完整包的缓冲区
 			while (1) {
 				int before_len = rlength;
 				printf("get msg:%.*s\n", rlength, rbuffer);
 				char *packet = parse_packet(rbuffer, &rlength, BUFFER_LENGTH);
+				printf("packet parsed, length: %d\n", before_len - rlength);
 				if (!packet) break; // 不完整包
-				//printf("packet parsed, length: %d\n", before_len - rlength);
+				
 				int packet_len = before_len - rlength;
 				char response[BUFFER_LENGTH]={0};
 				int slength = kvs_handler(packet, packet_len, response);
@@ -204,8 +206,8 @@ int ntyco_start(unsigned short port, msg_handler handler) {
 		if (master_fd >= 0) {
 			//add_client_fd(master_fd);
 			printf("[proactor] Connected to master (fd=%d)\n", master_fd);
-			
-			ntyco_broadcast(syncc,strlen(syncc));
+			send(master_fd, syncc, strlen(syncc), 0);
+			//ntyco_broadcast(syncc,strlen(syncc));
 		} else {
 			fprintf(stderr, "[proactor] Failed to connect master %s:%d\n", master_ip, port);
 		}
