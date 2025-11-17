@@ -303,7 +303,7 @@ int kvs_hash_save(char* filename,kvs_hash_t *hash){
 
     fclose(fp);//关闭文件
 
-    remove(filename);
+    //remove(filename);
     rename(tmpfile,filename);//替换文件
 
    // printf("[RDB] Saved %d keys to %s\n", hash_count, filename);

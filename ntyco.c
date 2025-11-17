@@ -170,7 +170,6 @@ int ntyco_connect(char *master_ip, unsigned short conn_port) {
     // 5. 注册协程 reader，模仿 proactor 的 set_event_recv
 	// 4. 加入 client_fds
 	add_client_fd(sockfd);
-	//ntyco_broadcast(syncc,strlen(syncc));
 	// 5. 注册协程 reader，模仿 proactor 的 set_event_recv
 	nty_coroutine *read_co = NULL;
 	int *pfd = malloc(sizeof(int));
@@ -181,6 +180,10 @@ int ntyco_connect(char *master_ip, unsigned short conn_port) {
 	}
 	*pfd = sockfd;
 	nty_coroutine_create(&read_co, server_reader, pfd);
+
+	// 6. 发送 SYNC 给 master（在 reader 已启动后发送，减少并发等待窗口）
+	ssize_t sr = send(sockfd, syncc, strlen(syncc), 0);
+	if (sr <= 0) perror("[ntyco_connect] send sync");
 
     printf("[ntyco] Connected to master %s:%d (fd=%d)\n",
            master_ip, conn_port, sockfd);

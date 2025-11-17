@@ -169,7 +169,15 @@ void nty_schedule_sched_wait(nty_coroutine *co, int fd, unsigned short events, u
 	co->events = events;
 	nty_coroutine *co_tmp = RB_INSERT(_nty_coroutine_rbtree_wait, &co->sched->waiting, co);
 
-	assert(co_tmp == NULL);
+	if (co_tmp != NULL) {
+		fprintf(stderr, "[nty_schedule_sched_wait] duplicate wait detected: fd=%d\n", co->fd);
+		fprintf(stderr, " existing co id=%"PRIu64" fd=%d status=%d events=%hu\n",
+			co_tmp->id, co_tmp->fd, co_tmp->status, co_tmp->events);
+		fprintf(stderr, " new co id=%"PRIu64" fd=%d status=%d events=%hu\n",
+			co->id, co->fd, co->status, co->events);
+		// keep the assert for now to preserve original behavior after logging
+		assert(co_tmp == NULL);
+	}
 
 	//printf("timeout --> %"PRIu64"\n", timeout);
 	if (timeout == 1) return ; //Error
