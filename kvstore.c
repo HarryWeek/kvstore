@@ -631,9 +631,7 @@ if (ENABLE_RDB){
         printf("rdb_load failed\n");
     }
 
-	if (ENABLE_RDB) {
-	start_rdb_save_thread();
-	}
+
 
 }
 
@@ -732,6 +730,9 @@ int main(int argc, char*argv[]){
 	}
 
 	init_kvengine();
+	if (ENABLE_RDB) {
+		start_rdb_save_thread();
+	}
 if (NETWORK_SELECT == NETWORK_REACTOR)
 	reactor_start(port, kvs_protocol);  //
 else if (NETWORK_SELECT == NETWORK_PROACTOR)
