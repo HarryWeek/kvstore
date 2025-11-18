@@ -435,6 +435,19 @@ int reactor_broadcast(char *msg, size_t len) {
         int fd = client_fds[i];
         if (fd <= 0) continue;
 
+		/* 检查 fd 是否仍然连接（对端是否存在） */
+		struct sockaddr_storage _sa;
+		socklen_t _salen = sizeof(_sa);
+		if (getpeername(fd, (struct sockaddr*)&_sa, &_salen) != 0) {
+			/* fd 已不可用，清理并从 client_fds 中移除 */
+			fprintf(stderr, "[reactor_broadcast] fd=%d not connected, removing\n", fd);
+			close(fd);
+			client_fds[i] = client_fds[client_count - 1];
+			client_count--;
+			i--; /* 保持 i 在当前索引，继续处理替换过来的 fd */
+			continue;
+		}
+
         size_t used = conn_list[fd].wlength;
         size_t remain = BUFFER_LENGTH - used;
 
