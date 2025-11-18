@@ -556,6 +556,7 @@ void *rdb_save_thread(void *arg) {
 int start_rdb_save_thread() {
     pthread_t tid;
     int ret = pthread_create(&tid, NULL, rdb_save_thread, NULL);
+    printf("RDB save thread started\n");
     if (ret != 0) {
         perror("pthread_create");
         return -1;

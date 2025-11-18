@@ -238,7 +238,7 @@ if (ENABLE_AOF){
 }            
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			int n=kvs_join_tokens(send_token,4,send_buffer);
+			int n=kvs_join_tokens(send_token,3,send_buffer);
 			kvs_sync_msg(send_buffer,n);
 			printf("del ret:%d\n",ret);
 #endif
@@ -314,7 +314,7 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			int n=kvs_join_tokens(send_token,4,send_buffer);
+			int n=kvs_join_tokens(send_token,3,send_buffer);
 			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
@@ -388,7 +388,7 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			int n=kvs_join_tokens(send_token,4,send_buffer);
+			int n=kvs_join_tokens(send_token,3,send_buffer);
 			kvs_sync_msg(send_buffer,n);
 #endif
 			length = sprintf(response, "OK\r\n");
@@ -480,7 +480,7 @@ if (ENABLE_AOF){
 }
 #if ENABLE_MS
 			char send_buffer[BUFFER_LENGTH];
-			kvs_join_tokens(send_token,4,send_buffer);
+			kvs_join_tokens(send_token,3,send_buffer);
 			kvs_sync_msg(send_buffer,strlen(send_buffer));
 #endif
             length = sprintf(response, "OK\r\n");
