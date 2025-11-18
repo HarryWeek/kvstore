@@ -78,7 +78,7 @@ int kvs_rdb_load(){
 int kvs_array_save(char*filename,kvs_array_t *inst){
     char tmpfile[256];
     pid_t pid = getpid();
-    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp.%d",filename,pid);
+    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp",filename);
     
     FILE *fp=fopen(tmpfile,"wb");
     if(!fp){
@@ -265,7 +265,7 @@ int kvs_hash_save(char* filename,kvs_hash_t *hash){
 
     char tmpfile[256];
     pid_t pid = getpid();
-    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp.%d",filename,pid);
+    snprintf(tmpfile,sizeof(tmpfile),"%s.tmp",filename);
     
     FILE *fp=fopen(tmpfile,"wb");
     if(!fp){

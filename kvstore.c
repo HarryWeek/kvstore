@@ -240,7 +240,7 @@ if (ENABLE_AOF){
 			char send_buffer[BUFFER_LENGTH];
 			int n=kvs_join_tokens(send_token,3,send_buffer);
 			kvs_sync_msg(send_buffer,n);
-			printf("del ret:%d\n",ret);
+			//printf("del ret:%d\n",ret);
 #endif
 			length = sprintf(response, "OK\r\n");
 		} else {
