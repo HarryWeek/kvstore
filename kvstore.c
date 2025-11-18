@@ -604,7 +604,7 @@ int kvs_protocol(char *msg, int length, char *response) {  //
 }
 
 
-
+extern void dest_kvengine(void);
 int init_kvengine(void) {
 #if MULTI_MSG
 	
@@ -644,8 +644,27 @@ if (ENABLE_AOF){
         printf("load aof file failed\n");
     }
 }
+if(kvs_role==ROLE_SLAVE){
+	dest_kvengine();
+#if ENABLE_ARRAY
+	memset(&global_array, 0, sizeof(kvs_array_t));
+	kvs_array_create(&global_array);
+
+#endif
+
+#if ENABLE_RBTREE
+	memset(&global_rbtree, 0, sizeof(kvs_rbtree_t));
+	kvs_rbtree_create(&global_rbtree);
+#endif
+
+#if ENABLE_HASH
+	memset(&global_hash, 0, sizeof(kvs_hash_t));
+	kvs_hash_create(&global_hash);
+#endif	
+}
+
     
-	return 0;
+
 }
 
 void dest_kvengine(void) {

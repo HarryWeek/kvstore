@@ -166,7 +166,7 @@ char* parse_packet(char *msg, int *msg_len, int buffer_size) {
     if (*msg_len <= 0) return NULL;
     int offset = 0;
     int total_used = 0;
-
+    printf("msg: %s",msg);
     while (1) {
         if (*msg_len - offset < 4) break;
 

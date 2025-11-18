@@ -279,19 +279,30 @@ int recv_cb(int fd) {
 
 	ws_request(&conn_list[fd]);
 
+
 #elif ENABLE_KVSTORE
 #if ENABLE_MS
-	
-	if(strcmp(conn_list[fd].rbuffer,syncc)==0){
-		printf("get SYNC fd:%d\n",fd);
-		add_client_fd(fd);
-	}
+			if (strcmp(conn_list[fd].rbuffer, syncc) == 0) {
+				printf("get SYNC fd:%d\n", fd);
+				add_client_fd(fd);
+			}
 #endif
-	char *packet=parse_packet(conn_list[fd].rbuffer,&conn_list[fd].rlength ,BUFFER_LENGTH);
-	//printf("get packet:%s\n",packet);
-	int wlen=kvs_request(&conn_list[fd],packet,strlen(packet));
-	//printf("wlen:%d\n",wlen);
-	kvs_free(packet);
+			/* 先记录收到前的长度，这样 parse_packet 返回后可以计算出实际包长 */
+			int before_len = conn_list[fd].rlength;
+			char *packet = parse_packet(conn_list[fd].rbuffer, &conn_list[fd].rlength, BUFFER_LENGTH);
+			if (!packet) {
+				/* 不完整包，等待更多数据；若缓冲区已满仍无完整包则重置以避免卡死 */
+				if (conn_list[fd].rlength == BUFFER_LENGTH) {
+					fprintf(stderr, "[recv_cb] buffer full and no complete packet, reset rlength for fd=%d\n", fd);
+					conn_list[fd].rlength = 0;
+				}
+			} else {
+				int pac_len = before_len - conn_list[fd].rlength;
+				//printf("get packet:%.*s\n", pac_len, packet);
+				int wlen = kvs_request(&conn_list[fd], packet, pac_len);
+				(void)wlen;
+				kvs_free(packet);
+			}
 #endif
 
 
