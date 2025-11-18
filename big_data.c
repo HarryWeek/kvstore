@@ -47,7 +47,7 @@ char *kvs_large_get(char *key) {
 
     kvs_large_index_t idx, latest = {0};
     int found = 0;
-
+    //printf("search key:%s\n",key);
     while (fread(&idx, sizeof(idx), 1, index_fp)) {
         if (strcmp(idx.key, key) == 0) {
             if (idx.deleted) {

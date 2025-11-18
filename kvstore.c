@@ -460,7 +460,7 @@ if (ENABLE_AOF){
             length = sprintf(response, "NO EXIST\r\n");
         } else {
             length = sprintf(response, "%s\r\n", res);
-            free(res);
+            //kvs_free(res);
         }
         break;
     }

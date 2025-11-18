@@ -19,7 +19,7 @@
 
 #define CONNECTION_SIZE			1024 // 1024 * 1024
 
-#define MAX_PORTS			1
+#define MAX_PORTS			20
 char syncc[1024]={0};
 #define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
 int event_register(int fd, int event);
