@@ -429,6 +429,55 @@ int kvs_rdb_broadcast_all() {
     }
     printf("[rdb_broadcast] sent %d hash kvs\n", total);
 #endif
+#if ENABLE_DATA
+
+    FILE *index_fp = fopen(VALUE_INDEX_FILE, "rb");
+    if (index_fp) {
+        kvs_large_index_t idx;
+        kvs_large_index_t *latest = NULL;
+        int latest_count = 0;
+
+        while (fread(&idx, sizeof(idx), 1, index_fp) == 1) {
+            int found = -1;
+            for (int j = 0; j < latest_count; j++) {
+                if (strcmp(latest[j].key, idx.key) == 0) {
+                    found = j;
+                    break;
+                }
+            }
+            if (found >= 0) {
+                latest[found] = idx;
+            } else {
+                kvs_large_index_t *tmp = realloc(latest, (latest_count + 1) * sizeof(kvs_large_index_t));
+                if (!tmp) break;
+                latest = tmp;
+                latest[latest_count++] = idx;
+            }
+        }
+        fclose(index_fp);
+
+        for (int j = 0; j < latest_count; j++) {
+            if (latest[j].deleted) continue;
+            char *val = kvs_large_get(latest[j].key);
+            if (!val) continue;
+
+            char *msg = kvs_malloc(BUFFER_LENGTH);
+            if (!msg) { kvs_free(val); continue; }
+            char *tokens[KVS_MAX_TOKENS] = {0};
+            tokens[0] = "SYNC";
+            tokens[1] = "LSET";
+            tokens[2] = latest[j].key;
+            tokens[3] = val;
+            int n = kvs_join_tokens(tokens, 4, msg);
+            if (n > 0) kvs_sync_msg(msg, n);
+            kvs_free(msg);
+            kvs_free(val);
+        }
+
+        if (latest) free(latest);
+    }
+
+#endif
 
     return 0;
 }

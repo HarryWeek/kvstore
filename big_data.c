@@ -68,7 +68,7 @@ char *kvs_large_get(char *key) {
     if (!data_fp) return NULL;
 
     fseek(data_fp, latest.offset, SEEK_SET);
-    char *buf = (char *)malloc(latest.length + 1);
+    char *buf = kvs_malloc(latest.length + 1);
     fread(buf, 1, latest.length, data_fp);
     buf[latest.length] = '\0';
     fclose(data_fp);
@@ -93,7 +93,7 @@ int kvs_large_del(char *key) {
     fflush(index_fp);
     fclose(index_fp);
 
-    printf("[LARGE_DEL] key=%s tombstone written\n", key);
+    //printf("[LARGE_DEL] key=%s tombstone written\n", key);
     return 0;
 }
 
@@ -147,7 +147,7 @@ int kvs_large_mod(char *key, char *value) {
     fflush(index_fp);
     fclose(index_fp);
 
-    printf("[LARGE_MOD] key=%s modified, new offset=%ld len=%d\n", key, offset, len);
+    //printf("[LARGE_MOD] key=%s modified, new offset=%ld len=%d\n", key, offset, len);
     return 0;
 }
 
