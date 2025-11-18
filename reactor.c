@@ -298,7 +298,7 @@ int recv_cb(int fd) {
 				}
 			} else {
 				int pac_len = before_len - conn_list[fd].rlength;
-				printf("get packet:%.*s\n", pac_len, packet);
+				//printf("get packet:%.*s\n", pac_len, packet);
 				int wlen = kvs_request(&conn_list[fd], packet, pac_len);
 				(void)wlen;
 				kvs_free(packet);
