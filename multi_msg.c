@@ -151,7 +151,7 @@ int kvs_multi_start(char *msg,int length,char* response,int max_resp_len){
         int msg_len = kvs_split_token(p, tokens);
         if (msg_len <= 0) break;  // 没有更多命令或格式错误
 
-        //printf("%s %s %s %s\n",tokens[0],tokens[1],tokens[2],tokens[3]);
+        printf("%s %s %s %s\n",tokens[0],tokens[1],tokens[2],tokens[3]);
         // 执行命令
         if(strcmp(tokens[0],"SYNC")==0){
             //printf("%s %s %s %s\n",tokens[0],tokens[1],tokens[2],tokens[3]);

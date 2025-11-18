@@ -625,6 +625,7 @@ int init_kvengine(void) {
 	memset(&global_hash, 0, sizeof(kvs_hash_t));
 	kvs_hash_create(&global_hash);
 #endif
+if(kvs_role==ROLE_MASTER){
 if (ENABLE_RDB){
     if((kvs_rdb_load())!=0){
         printf("rdb_load failed\n");
@@ -644,24 +645,10 @@ if (ENABLE_AOF){
         printf("load aof file failed\n");
     }
 }
-if(kvs_role==ROLE_SLAVE){
-	dest_kvengine();
-#if ENABLE_ARRAY
-	memset(&global_array, 0, sizeof(kvs_array_t));
-	kvs_array_create(&global_array);
-
-#endif
-
-#if ENABLE_RBTREE
-	memset(&global_rbtree, 0, sizeof(kvs_rbtree_t));
-	kvs_rbtree_create(&global_rbtree);
-#endif
-
-#if ENABLE_HASH
-	memset(&global_hash, 0, sizeof(kvs_hash_t));
-	kvs_hash_create(&global_hash);
-#endif	
 }
+
+
+
 
     
 
@@ -681,7 +668,7 @@ void dest_kvengine(void) {
 }
 
 
-#if UN_ENABLE_MS
+#if 0
 int main(int argc, char *argv[]) {
 
 	if (argc != 2) return -1;
@@ -726,7 +713,7 @@ int main(int argc, char*argv[]){
         printf("  %s slave <master_ip> [port]\n", argv[0]);
 		return -1;
 	}
-	init_kvengine();
+
 	if(strcmp(argv[1],"master")==0){
 		port = atoi(argv[2]);
 		kvs_role=ROLE_MASTER;		
@@ -744,7 +731,7 @@ int main(int argc, char*argv[]){
 		printf("Unknown role: %s\n", argv[1]);
 	}
 
-	
+	init_kvengine();
 if (NETWORK_SELECT == NETWORK_REACTOR)
 	reactor_start(port, kvs_protocol);  //
 else if (NETWORK_SELECT == NETWORK_PROACTOR)
