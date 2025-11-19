@@ -1,4 +1,6 @@
-#include "kvstore.h"
+
+
+#include"kvstore.h"
 #include <stdio.h>
 #include <liburing.h>
 #include <netinet/in.h>
@@ -77,8 +79,13 @@ int proactor_broadcast( char *msg, size_t len) {
 		//char *send_bufer=msg;
 		//sprintf(send_buffer,"S%s\r\n",msg);
         set_event_send(&ring, fd,msg, strlen(msg), 0);
+		//printf("send: ");
+		//print_visible(msg);
+		//printf(" to fd:%d i:%d\n", fd, i);
     }
 
+    // 提交所有发送任务
+    //io_uring_submit(&ring);
     return client_count;
 }
 int proactor_connect(char *master_ip, unsigned short conn_port) {
@@ -142,43 +149,26 @@ struct conn_info {
 };
 
 
-/* ---------------------------
-   Helper to pack fd+event into a pointer-sized user_data
-   This avoids allocating per-SQE structures and avoids copying large structs
-   We use low 2 bits for event (0..3), high bits for fd.
-   --------------------------- */
-static inline void *pack_user_data(int fd, int event) {
-    uintptr_t v = ((uintptr_t)fd << 2) | (uintptr_t)(event & 0x3);
-    return (void *)v;
-}
-static inline void unpack_user_data(void *p, int *fd, int *event) {
-    uintptr_t v = (uintptr_t)p;
-    *event = (int)(v & 0x3);
-    *fd = (int)(v >> 2);
-}
+int p_init_server(unsigned short port) {	
 
-/* ---------------------------
-   End helpers
-   --------------------------- */
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);	
+	struct sockaddr_in serveraddr;	
+	memset(&serveraddr, 0, sizeof(struct sockaddr_in));	
+	serveraddr.sin_family = AF_INET;	
+	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);	
+	serveraddr.sin_port = htons(port);	
 
-int p_init_server(unsigned short port) {
-
-	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	struct sockaddr_in serveraddr;
-	memset(&serveraddr, 0, sizeof(struct sockaddr_in));
-	serveraddr.sin_family = AF_INET;
-	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serveraddr.sin_port = htons(port);
-
-	if (-1 == bind(sockfd, (struct sockaddr*)&serveraddr, sizeof(struct sockaddr))) {
-		perror("bind");
-		return -1;
-	}
+	if (-1 == bind(sockfd, (struct sockaddr*)&serveraddr, sizeof(struct sockaddr))) {		
+		perror("bind");		
+		return -1;	
+	}	
 
 	listen(sockfd, 10);
-
+	
 	return sockfd;
 }
+
+
 
 
 
@@ -191,9 +181,13 @@ int set_event_recv(struct io_uring *ring, int sockfd,
         return -1;
     }
 
-    /* FIX: don't memcpy a struct into user_data (can overflow). Pack fd+event into pointer. */
+    struct conn_info accept_info = {
+        .fd = sockfd,
+        .event = EVENT_READ,
+    };
+	
     io_uring_prep_recv(sqe, sockfd, buf, len, flags);
-    io_uring_sqe_set_data(sqe, pack_user_data(sockfd, EVENT_READ));
+    memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
     return 0;
 
 }
@@ -201,15 +195,19 @@ int set_event_recv(struct io_uring *ring, int sockfd,
 
 int set_event_send(struct io_uring *ring, int sockfd,
 				      void *buf, size_t len, int flags) {
-
+	
 	struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
     if (!sqe) {
         fprintf(stderr, "[set_event_send] failed to get SQE: submission queue full\n");
         return -1;
     }
+	struct conn_info accept_info = {
+		.fd = sockfd,
+		.event = EVENT_WRITE,
+	};
+	
 	io_uring_prep_send(sqe, sockfd, buf, len, flags);
-	io_uring_sqe_set_data(sqe, pack_user_data(sockfd, EVENT_WRITE));
-	/* submit here is acceptable (keep behavior similar to your original) */
+	memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
 	int ret = io_uring_submit(ring);
     if (ret < 0) {
         fprintf(stderr, "[set_event_send] io_uring_submit() failed: %s\n", strerror(-ret));
@@ -232,8 +230,13 @@ int set_event_accept(struct io_uring *ring, int sockfd, struct sockaddr *addr,
         return -1;
     }
 
+    struct conn_info accept_info = {
+        .fd = sockfd,
+        .event = EVENT_ACCEPT,
+    };
+	
     io_uring_prep_accept(sqe, sockfd, (struct sockaddr*)addr, addrlen, flags);
-    io_uring_sqe_set_data(sqe, pack_user_data(sockfd, EVENT_ACCEPT)); /* FIX */
+    memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
     return 0;
 
 }
@@ -271,10 +274,10 @@ int proactor_start(unsigned short port, msg_handler handler) {
         return -1;
     }
     printf("io_uring initialized successfully\n");
-
-    struct sockaddr_in clientaddr;
+    
+    struct sockaddr_in clientaddr;    
     socklen_t len = sizeof(clientaddr);
-
+    
     // 检查设置accept事件是否成功
     if (set_event_accept(&ring, sockfd, (struct sockaddr*)&clientaddr, &len, 0) < 0) {
         fprintf(stderr, "set_event_accept failed\n");
@@ -296,7 +299,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
 		if (master_fd >= 0) {
 			add_client_fd(master_fd);
 			printf("[proactor] Connected to master (fd=%d)\n", master_fd);
-
+			
 			//proactor_broadcast(sync,strlen(sync));
 			kvs_sync_msg(syncc,strlen(syncc));
 		} else {
@@ -309,30 +312,28 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
 	while (1) {
 
-		/* submit any pending SQEs */
 		io_uring_submit(&ring);
 
-		/* FIX: remove the io_uring_wait_cqe here — we use peek_batch to get available CQEs.
-		   calling wait then peek_batch can lead to confusing behavior. */
-		// struct io_uring_cqe *cqe;
-		// io_uring_wait_cqe(&ring, &cqe);
+
+		struct io_uring_cqe *cqe;
+		io_uring_wait_cqe(&ring, &cqe);
 
 		struct io_uring_cqe *cqes[128];
-		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // get available completions
+		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // epoll_wait
 
 		int i = 0;
 		for (i = 0;i < nready;i ++) {
 
 			struct io_uring_cqe *entries = cqes[i];
-			/* FIX: use packed pointer unpacking */
-			int ev_fd, ev_event;
-			unpack_user_data(io_uring_cqe_get_data(entries), &ev_fd, &ev_event);
+			struct conn_info result;
+			memcpy(&result, &entries->user_data, sizeof(struct conn_info));
 
-			if (ev_event == EVENT_ACCEPT) {
+			if (result.event == EVENT_ACCEPT) {
 
                 if (set_event_accept(&ring, sockfd, (struct sockaddr*)&clientaddr, &len, 0) < 0) {
                     fprintf(stderr, "[proactor_start] set_event_accept failed\n");
                 }
+				//printf("set_event_accept\n"); //
 
                 int connfd = entries->res;
                 if (connfd < 0) {
@@ -360,78 +361,81 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     conn->recv_pending = 1;
                 }
 
-
-			} else if (ev_event == EVENT_READ) {  //
+				
+			} else if (result.event == EVENT_READ) {  //
 
 				int ret = entries->res;
 
-                int result_fd = ev_fd;
-
 				if (ret == 0) {
                     // remote closed
-                    if (result_fd >=0 && result_fd < MAX_CONN) {
-                        p_conn_list[result_fd].recv_pending = 0;
+                    if (result.fd >=0 && result.fd < MAX_CONN) {
+                        p_conn_list[result.fd].recv_pending = 0;
                     }
-                    remove_client_fd(result_fd); /* FIX: remove from client list if present */
-                    close(result_fd);
+                    close(result.fd);
 
 				} else if (ret > 0) {
 #if ENABLE_MS
                     // 判断是否为 SYNC 消息（比较整个当前缓冲区内容）
-                    connection_t *conn = &p_conn_list[result_fd];
+                    connection_t *conn = &p_conn_list[result.fd];
 #endif
                     // 处理正常读取：数据已经被写入到 conn->rbuffer + old_rlength
-                    if (result_fd < 0 || result_fd >= MAX_CONN) {
-                        close(result_fd);
+                    if (result.fd < 0 || result.fd >= MAX_CONN) {
+                        close(result.fd);
                         continue;
                     }
 
                     // 清除 recv_pending（当前 cqe 表示先前提交的 recv 已完成）
-                    connection_t *conn2 = &p_conn_list[result_fd];
+                    connection_t *conn2 = &p_conn_list[result.fd];
                     conn2->recv_pending = 0;
 
-                    // 记录 old 长度
-                    int old_len = conn2->rlength;
-
+                    // 更新已接收长度
                     // 防止越界并计算加入前后的长度
                     size_t add = (size_t)ret;
                     if (conn2->rlength + add > BUFFER_LENGTH) {
                         add = BUFFER_LENGTH - conn2->rlength;
-                        printf("[proactor] Warning: buffer overflow for fd %d, truncating data\n", result_fd);
+                        printf("[proactor] Warning: buffer overflow for fd %d, truncating data\n", result.fd);
                     }
+                    int before_len = conn2->rlength + add; // 包含新数据的总长度
                     conn2->rlength += add;
-                    int new_len = conn2->rlength; /* FIX: new_len is old + add */
 
 #if ENABLE_MS
                     if (conn->rlength == (int)strlen(syncc) && memcmp(conn->rbuffer, syncc, conn->rlength) == 0) {
-                        printf("get SYNC fd:%d\n", result_fd);
-                        add_client_fd(result_fd);
+                        printf("get SYNC fd:%d\n", result.fd);
+                        add_client_fd(result.fd);
                     }
 #endif
 
-                    /* 调用 parse_packet：parse_packet 会修改 conn2->rlength 为剩余未解析的数据长度 */
+                    //printf("get msg:%s\n", conn2->rbuffer);
+                    // 如果缓冲区不以 '#' 开头，打印十六进制帮助诊断（协议应以 # 开头）
+                    // if (conn2->rlength > 0 && conn2->rbuffer[0] != '#') {
+                    //     fprintf(stderr, "[proactor] protocol error: buffer does not start with '#', fd=%d, rlength=%d\n", result.fd, conn2->rlength);
+                    //     // 打印前 64 字节的 hex 视图
+                    //     int dump = conn2->rlength < 64 ? conn2->rlength : 64;
+                    //     for (int z = 0; z < dump; z++) {
+                    //         fprintf(stderr, "%02X ", (unsigned char)conn2->rbuffer[z]);
+                    //     }
+                    //     fprintf(stderr, "\n");
+                    // }
+
                     char *packet = parse_packet(conn2->rbuffer, &conn2->rlength, BUFFER_LENGTH);
                     if (!packet) {
                         // parse_packet 返回 NULL 可能表示：
-                        //  - 不完整包（保留在缓冲区，等待后续数据）或协议错误
+                        //  - 不完整包（保留在缓冲区，等待后续数据）
+                        //  - 协议错误（parse_packet 会将 *msg_len 置为 0）
                         if (conn2->rlength == 0) {
                             // 协议错误：记录并关闭连接
-                            fprintf(stderr, "[proactor] protocol error, closing fd %d, buf='%s'\n", result_fd, conn2->rbuffer);
-                            remove_client_fd(result_fd);
-                            close(result_fd);
+                            fprintf(stderr, "[proactor] protocol error, closing fd %d, buf='%s'\n", result.fd, conn2->rbuffer);
+                            close(result.fd);
                             conn2->recv_pending = 0;
                         } else {
                             // 不完整包：什么也不做，等待更多数据（下面会重新注册 recv）
+                            // 可选：打印调试信息但不要退出进程
+                            // fprintf(stderr, "[proactor] incomplete packet, waiting for more data, fd=%d, rlength=%d\n", result.fd, conn2->rlength);
                         }
                     } else {
-                        /* FIX: 正确计算 packet_len:
-                           new_len 是加入新数据之后的总长度
-                           parse_packet 已将 conn2->rlength 置为剩余长度
-                           因此 packet_len = new_len - conn2->rlength
-                        */
-                        int packet_len = new_len - conn2->rlength;
+                        int packet_len = before_len - conn2->rlength;
                         ret = kvs_handler(packet, packet_len, response);
-                        set_event_send(&ring, result_fd, response, ret, 0);
+                        set_event_send(&ring, result.fd, response, ret, 0);
                         kvs_free(packet);
                     }
 
@@ -439,50 +443,49 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     size_t avail_after = BUFFER_LENGTH - conn2->rlength;
                     if (avail_after > 0) {
                         if (!conn2->recv_pending) {
-                            if (set_event_recv(&ring, result_fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
-                                fprintf(stderr, "[proactor] set_event_recv failed for fd %d after read\n", result_fd);
-                                remove_client_fd(result_fd);
-                                close(result_fd);
+                            if (set_event_recv(&ring, result.fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
+                                fprintf(stderr, "[proactor] set_event_recv failed for fd %d after read\n", result.fd);
+                                close(result.fd);
                                 continue;
                             }
                             conn2->recv_pending = 1;
                         }
                     }
 				}
-			}  else if (ev_event == EVENT_WRITE) {
+			}  else if (result.event == EVENT_WRITE) {
   //
 
 				int ret = entries->res;
+				//printf("set_event_send ret: %d, %s\n", ret, buffer);
 
-                int result_fd = ev_fd;
-
-            if (result_fd < 0 || result_fd >= MAX_CONN) {
-                close(result_fd);
+            if (result.fd < 0 || result.fd >= MAX_CONN) {
+                close(result.fd);
                 continue;
             }
-            connection_t *conn3 = &p_conn_list[result_fd];
+            connection_t *conn3 = &p_conn_list[result.fd];
             // write 完成表示之前的 send 已完成，不影响 recv_pending
 			size_t avail = BUFFER_LENGTH - conn3->rlength;
 			if (avail == 0) {
-                printf("[proactor] Warning: buffer full after write for fd %d, resetting rlength\n", result_fd);
+                printf("[proactor] Warning: buffer full after write for fd %d, resetting rlength\n", result.fd);
 				conn3->rlength = 0;
 				avail = BUFFER_LENGTH;
 			}
             if (!conn3->recv_pending) {
-                if (set_event_recv(&ring, result_fd, conn3->rbuffer + conn3->rlength, avail, 0) < 0) {
-                    fprintf(stderr, "[proactor_start] set_event_recv failed for fd %d after write\n", result_fd);
-                    remove_client_fd(result_fd);
-                    close(result_fd);
+                if (set_event_recv(&ring, result.fd, conn3->rbuffer + conn3->rlength, avail, 0) < 0) {
+                    fprintf(stderr, "[proactor_start] set_event_recv failed for fd %d after write\n", result.fd);
+                    close(result.fd);
                     continue;
                 }
                 conn3->recv_pending = 1;
             }
-
+				
 			}
-
+			
 		}
 
 		io_uring_cq_advance(&ring, nready);
 	}
 
 }
+
+
