@@ -655,6 +655,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 } else if (type == MSG_TYPE_DATA) {
                                     int payload_len = packet_len - 5;
                                     int resp_len = 0;
+                                    if(strcmp(packet+ 5,syncc)==0){
+                                        add_client_fd(result_fd);
+                                    }
                                     if (kvs_handler) resp_len = kvs_handler(packet + 5, payload_len, response);
                                     char ack_buf[5];
                                     uint32_t id_net = htonl(msg_id);
