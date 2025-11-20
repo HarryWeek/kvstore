@@ -74,7 +74,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response);
 int kvs_split_token(char *msg, char *tokens[]);
 int kvs_join_tokens(char *tokens[], int count, char *msg);
 char* parse_packet(char *msg, int *msg_len, int buffer_size); 
-
+char* trans_parse_packet(char *msg, int *msg_len, int buffer_size);
 #if ENABLE_ARRAY
 
 typedef struct kvs_array_item_s {
