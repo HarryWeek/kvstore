@@ -390,7 +390,10 @@ static void check_retransmissions() {
 
 int proactor_broadcast(char *msg, size_t len) {
 #if ENABLE_MS
-    if (client_count == 0) return -1;
+    if (client_count == 0){
+        printf("client_count is 0, no broadcast\n");
+        return -1;
+    } 
     for (int i = 0; i < client_count; i++) {
         int fd = client_fds[i];
         if (fd < 0 || fd >= MAX_CONN) continue;
@@ -607,6 +610,14 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 /* 等待更多数据 */
                             }
                         } else {
+                                    // printf("received packet: ");
+                                    // print_visible(packet);
+                                    // printf("\n");
+                                    // print_visible(syncc);
+                                    // printf("\n");
+                                    if(strcmp(packet,syncc)==0){
+                                        add_client_fd(result_fd);
+                                    }
                             int packet_len = before_len - conn2->rlength;
                             int outlen = 0;
                             if (kvs_handler) outlen = kvs_handler(packet, packet_len, response);
@@ -655,9 +666,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 } else if (type == MSG_TYPE_DATA) {
                                     int payload_len = packet_len - 5;
                                     int resp_len = 0;
-                                    if(strcmp(packet+ 5,syncc)==0){
-                                        add_client_fd(result_fd);
-                                    }
+                                    print_visible(packet + 5);
+
                                     if (kvs_handler) resp_len = kvs_handler(packet + 5, payload_len, response);
                                     char ack_buf[5];
                                     uint32_t id_net = htonl(msg_id);
