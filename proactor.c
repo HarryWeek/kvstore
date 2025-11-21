@@ -78,7 +78,7 @@ int proactor_broadcast( char *msg, size_t len) {
         int fd = client_fds[i];
 		//char *send_bufer=msg;
 		//sprintf(send_buffer,"S%s\r\n",msg);
-        set_event_send(&ring, fd,msg, strlen(msg), 0);
+        set_event_send(&ring, fd,msg, len, 0);
 		//printf("send: ");
 		//print_visible(msg);
 		//printf(" to fd:%d i:%d\n", fd, i);
