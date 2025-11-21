@@ -315,8 +315,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
 		io_uring_submit(&ring);
 
 
-		struct io_uring_cqe *cqe;
-		io_uring_wait_cqe(&ring, &cqe);
+		//struct io_uring_cqe *cqe;
+		//io_uring_wait_cqe(&ring, &cqe);
 
 		struct io_uring_cqe *cqes[128];
 		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // epoll_wait
