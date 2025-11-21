@@ -55,7 +55,7 @@ typedef struct connection_s {
     int rlength;
     char wbuffer[BUFFER_LENGTH];
     int wlength;
-    int recv_pending;
+    int recv_pending;//0:没有挂起的接收 1:有挂起的接收
 
     /* retransmit */
     outstanding_t outstanding[MAX_OUTSTANDING]; // 存放未确认的消息
@@ -68,7 +68,8 @@ static connection_t p_conn_list[MAX_CONN];
 
 /* 全局 io_uring，文件内只声明一次 */
 struct io_uring ring;
-
+char* trans_parse_packet(int fd, connection_t *conn,
+                         char *msg, int *msg_len, int buffer_size);
 /* pack/unpack fd+event into user_data pointer (uintptr_t) */
 static inline void *pack_user_data(int fd, int event) {
     uintptr_t v = ((uintptr_t)fd << 2) | (uintptr_t)(event & 0x3);
@@ -153,7 +154,15 @@ void print_visible(char *msg) {
         }
     }
 }
-
+void x_print_visible(char *buf, int len) {
+    for (int i = 0; i < len; i++) {
+        unsigned char c = buf[i];
+        if (c >= 32 && c <= 126)
+            printf("%c", c);
+        else
+            printf("\\x%02X", c);
+    }
+}
 /* Connect to master (used by slave). Make socket non-blocking optional depending on requirement */
 int proactor_connect(char *master_ip, unsigned short conn_port) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -498,11 +507,12 @@ int proactor_start(unsigned short port, msg_handler handler) {
         }
 
         for (int i = 0; i < nready; i++) {
+            //printf("nready=%d\n",nready);
             struct io_uring_cqe *entry = cqes[i];
             int ev_fd = -1, ev_event = -1;
             void *ud = io_uring_cqe_get_data(entry);
             if (ud) unpack_user_data(ud, &ev_fd, &ev_event);
-
+            printf("[proactor] Event on fd %d, type %d, res %d\n", ev_fd, ev_event, entry->res);
             if (ev_event == EVENT_ACCEPT) {
                 /* 重新注册 accept */
                 if (set_event_accept(&ring, sockfd, (struct sockaddr *)&clientaddr, &len, 0) < 0) {
@@ -581,8 +591,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     conn2->recv_pending = 0;
 
                     /* 安全打印：避免 %s 直接打印未结束字符串 */
-                    // printf("get msg (%d bytes)\n", res);
-
+                    printf("get msg (%d bytes)\n", res);
+                    x_print_visible(conn2->rbuffer, res);
+                    printf("\n");
                     int MS = 0;
 #if ENABLE_MS
                     for (int k = 0; k < client_count; k++) {
@@ -631,7 +642,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         }
                     } else {
                         /* 主从消息处理 */
-                        char *packet = trans_parse_packet(conn2->rbuffer, &conn2->rlength, BUFFER_LENGTH);
+                        char *packet = trans_parse_packet(result_fd, conn2, conn2->rbuffer, &conn2->rlength, BUFFER_LENGTH);
+
                         if (!packet) {
                             if (conn2->rlength == 0) {
 #if ENABLE_MS
@@ -643,6 +655,11 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 /* partial, wait for more */
                             }
                         } else {
+
+#if 1
+                            printf("received ms packet: ");
+                            print_visible(packet+5);
+                            printf("\n");
                             int packet_len = before_len - conn2->rlength;
                             if (packet_len < 5) {
                                 kvs_free(packet);
@@ -684,6 +701,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 }
                                 kvs_free(packet);
                             }
+#endif
                         }
                     }
 
@@ -699,7 +717,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     }
                 } else {
                     /* res < 0: error on recv */
-                    int err = -entry->res;
+                    int err = entry->res;
                     fprintf(stderr, "[proactor] read error on fd %d: %s\n", result_fd, strerror(err));
                     if (result_fd >= 0 && result_fd < MAX_CONN) {
                         connection_t *c = &p_conn_list[result_fd];
@@ -715,21 +733,27 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     close(result_fd);
                 }
             } else if (ev_event == EVENT_WRITE) {
+                //printf("[proactor] write completed on fd %d, res %d\n", ev_fd, entry->res);
                 int written = entry->res;
                 int result_fd = ev_fd;
                 if (result_fd < 0 || result_fd >= MAX_CONN) { close(result_fd); continue; }
                 connection_t *conn3 = &p_conn_list[result_fd];
                 size_t avail = BUFFER_LENGTH - conn3->rlength;
+                printf("avail: %zu\n", avail);
+                
                 if (avail == 0) {
                     printf("[proactor] Warning: write completed but no space to recv on fd %d\n", result_fd);
                     conn3->recv_pending = 0;
                     avail = BUFFER_LENGTH;
                 }
+                printf("recv_pending: %d\n", conn3->recv_pending);
                 if (!conn3->recv_pending) {
                     if (set_event_recv(&ring, result_fd, conn3->rbuffer + conn3->rlength, avail, 0) < 0) {
                         fprintf(stderr, "[proactor] set_event_recv failed for fd %d after write\n", result_fd);
                         close(result_fd);
                         continue;
+                    }else{
+                        printf("[proactor] set_event_recv success for fd %d after write\n", result_fd);
                     }
                     conn3->recv_pending = 1;
                 }
@@ -746,4 +770,120 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
     /* unreachable, 但保持接口 */
     return 0;
+}
+
+
+char* trans_parse_packet(int fd, connection_t *conn,
+                         char *msg, int *msg_len, int buffer_size)
+{
+    if (*msg_len <= 0) return NULL;
+
+    int offset = 0;
+    int total_used = 0;
+
+    while (1) {
+        if (*msg_len - offset < 8) break;   // 至少 msg_id(4) + type(1) + "#x\r\n"(3)
+
+        /* '#' 必须在 offset+5 */
+        if (msg[offset + 5] != '#') {
+            char *p = memchr(msg + offset + 5, '#', *msg_len - (offset + 5));
+            if (p) {
+                int skip = p - (msg + offset) - 5;
+                memmove(msg, msg + offset + 5 + skip,
+                        *msg_len - (offset + 5 + skip));
+                *msg_len -= (offset + 5 + skip);
+                offset = 0;
+                continue;
+            } else {
+                if (*msg_len > buffer_size/2) {
+                    *msg_len = 0;
+                    return NULL;
+                } else break;
+            }
+        }
+
+        int header_off = offset + 5;
+        int remaining = *msg_len - header_off;
+        char *rn = memmem(msg + header_off, remaining, "\r\n", 2);
+        if (!rn) break;   // header 不完整
+
+        int header_len = (rn - (msg + header_off)) + 2;
+
+        /* 解析 body 长度 */
+        int body_len = 0;
+        char *pnum = msg + header_off + 1;
+        char *pnum_end = rn;
+        for (char *t = pnum; t < pnum_end; t++) {
+            if (!isdigit((unsigned char)*t)) { *msg_len = 0; return NULL; }
+            body_len = body_len * 10 + (*t - '0');
+        }
+        if (body_len > buffer_size) { *msg_len = 0; return NULL; }
+
+        int packet_len = 5 + header_len + body_len;
+
+        if (*msg_len - offset < packet_len) break;  // 半包
+
+        offset += packet_len;
+        total_used = offset;
+    }
+
+    if (total_used == 0) return NULL;
+
+    /* 分配完整消息块 */
+    char *full_packet = kvs_malloc(total_used);
+    if (!full_packet) { *msg_len = 0; return NULL; }
+    memcpy(full_packet, msg, total_used);
+
+    /* 移动剩余消息 */
+    int remain = *msg_len - total_used;
+    if (remain > 0) memmove(msg, msg + total_used, remain);
+    *msg_len = remain;
+
+    /* --- 开始处理消息头部（msg_id + type） --- */
+
+    uint32_t msg_id;
+    msg_type_t type;
+    memcpy(&msg_id, full_packet, 4);
+    msg_id = ntohl(msg_id);
+    type = (msg_type_t)full_packet[4];
+
+    if (type == MSG_TYPE_ACK) {
+        /* 处理 pending */
+        for (int i = 0; i < MAX_OUTSTANDING; i++) {
+            outstanding_t *o = &conn->outstanding[i];
+            if (o->pending && o->msg_id == msg_id) {
+                if (o->buf) kvs_free(o->buf);
+                o->buf = NULL;
+                o->pending = 0;
+                conn->outstanding_count--;
+                break;
+            }
+        }
+        kvs_free(full_packet);
+        return NULL;    // ACK 不需要返回给上层
+    }
+
+    /* ---------------- DATA 消息 ------------------ */
+
+    /* 给对端发 ACK */
+    char ack_buf[5];
+    uint32_t id_net = htonl(msg_id);
+    memcpy(ack_buf, &id_net, 4);
+    ack_buf[4] = MSG_TYPE_ACK;
+
+    set_event_send(&ring, fd, ack_buf, 5, 0);
+
+    /* 返回 payload（剔除 msg_id + type） */
+    int payload_len = total_used - 5;
+    char *payload = kvs_malloc(payload_len + 1);
+    if (!payload) {
+        kvs_free(full_packet);
+        return NULL;
+    }
+
+    memcpy(payload, full_packet + 5, payload_len);
+    payload[payload_len] = '\0';
+
+    kvs_free(full_packet);
+    return payload;
 }

@@ -402,6 +402,7 @@ char* parse_packet(char *msg, int *msg_len, int buffer_size) {
     return full_packet;
 }
 #endif
+#if 0
 char* trans_parse_packet(char *msg, int *msg_len, int buffer_size) {
     if (*msg_len <= 0) return NULL;
 
@@ -417,6 +418,7 @@ char* trans_parse_packet(char *msg, int *msg_len, int buffer_size) {
         // '#': 必须在 offset+5 处
         if (msg[offset + 5] != '#') {
             // 和原逻辑一致：从 offset+5 后找 '#'
+            //printf("get #\n");
             char *p = memchr(msg + offset + 5, '#', *msg_len - (offset + 5));
             if (p) {
                 int skip = p - (msg + offset) - 5; // 跳过至 '#' 的距离
@@ -499,7 +501,8 @@ char* trans_parse_packet(char *msg, int *msg_len, int buffer_size) {
     } else {
         msg[0] = '\0';
     }
-    *msg_len = remain;
-
+    *msg_len = remain+5;
+    //printf("full packet: %s\n", full_packet);
     return full_packet;
 }
+#endif
