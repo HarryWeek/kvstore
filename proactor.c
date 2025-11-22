@@ -611,6 +611,16 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         //数据体不完整，等待后续数据
                                         break;
                                     }
+                                    char *p2=memchr(buffer+head_len+h_len,'@',*rlen - (head_len+h_len));
+                                    if(p2){
+                                        if(p2-(buffer+head_len)<body_len){
+                                            //数据体错误，寻找下一个包
+                                            memmove(buffer,p2,*rlen - (p2 - buffer));
+                                            *rlen=*rlen - (p2 - buffer);
+                                            offset=0;
+                                            continue;
+                                        }
+                                    }
                                     //完整数据包，处理之
                                     memcpy(packet+pack_len,buffer+head_len,h_len+body_len);
                                     pack_len+=h_len+body_len;
