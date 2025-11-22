@@ -607,7 +607,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         //数据帧数据错误，丢弃该包，寻找下一个包
                                         continue;
                                     }
-                                    if(body_len>*rlen - h_len){
+                                    if(body_len>*rlen - h_len - head_len){
                                         //数据体不完整，等待后续数据
                                         break;
                                     }
@@ -650,11 +650,17 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 }else{
                                     //需要重传多个包
                                     int to_retransmit=msg_id - (conn2->retransmit_count+1);
+                                    printf("to_retransmit:%d\n",to_retransmit);
                                     for(int i=0;i<to_retransmit;i++){
                                         if(curr){
                                             //重传数据包
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
                                             printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
+                    
+                                            conn2->send_queue_head=curr->next;
+                                            conn2->queue_size--;
+                                            kvs_free(curr->msg);
+                                            kvs_free(curr);
                                             curr=curr->next;
                                             conn2->retransmit_count++;
                                         }else{
@@ -787,6 +793,18 @@ int proactor_start(unsigned short port, msg_handler handler) {
             }
             connection_t *conn3 = &p_conn_list[result.fd];
             // write 完成表示之前的 send 已完成，不影响 recv_pending
+            if(ret<0){
+                if(ret==-EPIPE||ret==-ECONNRESET){
+                    // 连接被对端关闭
+                    fprintf(stderr, "[proactor] write error on fd %d: %s, closing connection\n", result.fd, strerror(-ret));
+                    close(result.fd);
+                    remove_client_fd(result.fd);
+                    continue;
+                }else{
+                    fprintf(stderr, "[proactor] write error on fd %d: %s\n", result.fd, strerror(-ret));
+                    continue;
+                }
+            }
 			size_t avail = BUFFER_LENGTH - conn3->rlength;
 			if (avail == 0) {
                 printf("[proactor] Warning: buffer full after write for fd %d, resetting rlength\n", result.fd);
