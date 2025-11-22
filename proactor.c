@@ -11,6 +11,8 @@
 #define EVENT_ACCEPT   	0
 #define EVENT_READ		1
 #define EVENT_WRITE		2
+#define TYPE_DATA       0
+#define TYPE_ACK        1
 #define ENTRIES_LENGTH		1024
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
@@ -24,6 +26,12 @@ extern int master_port;
 extern int slave_port;
 extern struct io_uring ring;  // 引用主loop的全局ring
 
+typedef struct Node{
+    char *msg;
+    int msg_id;
+    struct Node* next;
+}Node;
+
 typedef struct connection_s{
     int fd;
     char rbuffer[BUFFER_LENGTH];
@@ -31,6 +39,11 @@ typedef struct connection_s{
     char wbuffer[BUFFER_LENGTH];
     int wlength;
     int recv_pending;
+    Node *send_queue_head;//存放待发送但未确认的数据包
+    Node *send_queue_tail;
+    int queue_size;
+    int msg_id;
+    int retransmit_count;//已返回确认帧的序号，该序号之前的数据包都已被确认，新序号的差大于1则需要重传
 } connection_t;
 
 connection_t p_conn_list[MAX_CONN];
@@ -70,6 +83,27 @@ void print_visible(char *msg) {
         }
     }
 }
+
+char *pack_header(char* msg,int len,int msg_id,int type){
+    char* p=kvs_malloc(BUFFER_LENGTH);
+    sprintf(p,"@%d^%d\r\n%s",msg_id,type,msg);
+    return p;
+}
+int unpack_header(char* msg,int* msg_id,int* type,int *head_len){
+    if(msg[0]!='@') return -1;
+    char* p=msg+1;
+    *msg_id=atoi(p);
+    char* caret=strchr(p,'^');
+    if(!caret) return -1;
+    p=caret+1;
+    *type=atoi(p);
+    char* rn=strstr(p,"\r\n");
+    if(!rn) return -1;
+    p=rn+2;
+    *head_len=p-msg;
+    return 0;
+}
+
 int proactor_broadcast( char *msg, size_t len) {
 	//printf("client_count:%d\n",client_count);
     if (client_count == 0) return -1;
@@ -78,6 +112,22 @@ int proactor_broadcast( char *msg, size_t len) {
         int fd = client_fds[i];
 		//char *send_bufer=msg;
 		//sprintf(send_buffer,"S%s\r\n",msg);
+        char *packet=pack_header(msg,len,p_conn_list[fd].msg_id,TYPE_DATA);
+        p_conn_list[fd].msg_id++;
+        connection_t *c=&p_conn_list[fd];
+        if(c->send_queue_head==NULL){
+            c->send_queue_head=(Node*)kvs_malloc(sizeof(Node));
+            c->send_queue_head->msg=packet;
+            c->send_queue_head->next=NULL;
+            c->send_queue_tail=c->send_queue_head;
+            c->queue_size=1;
+        }else{
+            c->send_queue_tail->next=(Node*)kvs_malloc(sizeof(Node));
+            c->send_queue_tail=c->send_queue_tail->next;
+            c->send_queue_tail->msg=packet;
+            c->send_queue_tail->next=NULL;
+            c->queue_size++;
+        }
         set_event_send(&ring, fd,msg, len, 0);
 		//printf("send: ");
 		//print_visible(msg);
@@ -85,7 +135,7 @@ int proactor_broadcast( char *msg, size_t len) {
     }
 
     // 提交所有发送任务
-    //io_uring_submit(&ring);
+    io_uring_submit(&ring);
     return client_count;
 }
 int proactor_connect(char *master_ip, unsigned short conn_port) {
@@ -120,6 +170,11 @@ int proactor_connect(char *master_ip, unsigned short conn_port) {
     conn->rlength = 0;
     conn->wlength = 0;
     conn->recv_pending = 0;
+    conn->msg_id = 1;
+    conn->retransmit_count = 0;
+    conn->send_queue_head = NULL;
+    conn->send_queue_tail = NULL;
+    conn->queue_size = 0;
     memset(conn->rbuffer, 0, BUFFER_LENGTH);
     memset(conn->wbuffer, 0, BUFFER_LENGTH);
     // 注册recv事件，等主节点发数据
@@ -127,13 +182,13 @@ int proactor_connect(char *master_ip, unsigned short conn_port) {
         close(sockfd);
         return -1;
     }
-    if (set_event_recv(&ring, sockfd, conn->rbuffer, BUFFER_LENGTH, 0) < 0) {
-        fprintf(stderr, "[proactor_connect] set_event_recv failed for fd %d\n", sockfd);
-        close(sockfd);
-        return -1;
-    }
-    conn->recv_pending = 1;
-    io_uring_submit(&ring);
+    // if (set_event_recv(&ring, sockfd, conn->rbuffer, BUFFER_LENGTH, 0) < 0) {
+    //     fprintf(stderr, "[proactor_connect] set_event_recv failed for fd %d\n", sockfd);
+    //     close(sockfd);
+    //     return -1;
+    // }
+    // conn->recv_pending = 1;
+    // io_uring_submit(&ring);
 
     printf("[proactor] Connected to master %s:%d (fd=%d)\n", master_ip, conn_port, sockfd);
 
@@ -208,14 +263,14 @@ int set_event_send(struct io_uring *ring, int sockfd,
 	
 	io_uring_prep_send(sqe, sockfd, buf, len, flags);
 	memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
-	int ret = io_uring_submit(ring);
-    if (ret < 0) {
-        fprintf(stderr, "[set_event_send] io_uring_submit() failed: %s\n", strerror(-ret));
-        return -1;
-    } else if (ret == 0) {
-        fprintf(stderr, "[set_event_send] io_uring_submit() returned 0, no SQE submitted\n");
-        return -1;
-    }
+	// int ret = io_uring_submit(ring);
+    // if (ret < 0) {
+    //     fprintf(stderr, "[set_event_send] io_uring_submit() failed: %s\n", strerror(-ret));
+    //     return -1;
+    // } else if (ret == 0) {
+    //     fprintf(stderr, "[set_event_send] io_uring_submit() returned 0, no SQE submitted\n");
+    //     return -1;
+    // }
 	return 0;
 }
 
@@ -256,6 +311,12 @@ int proactor_start(unsigned short port, msg_handler handler) {
     conn->fd=sockfd;
     conn->rlength=0;
     conn->wlength=0;
+    conn->recv_pending=0;
+    conn->msg_id=1;
+    conn->retransmit_count=0;
+    conn->send_queue_head = NULL;
+    conn->send_queue_tail = NULL;
+    conn->queue_size = 0;
     memset(conn->rbuffer,0,BUFFER_LENGTH);
     memset(conn->wbuffer,0,BUFFER_LENGTH);
 
@@ -350,6 +411,11 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 conn->rlength = 0;
                 conn->wlength = 0;
                 conn->recv_pending = 0;
+                conn->msg_id = 1;
+                conn->retransmit_count = 0;
+                conn->send_queue_head = NULL;
+                conn->send_queue_tail = NULL;
+                conn->queue_size = 0;
                 memset(conn->rbuffer, 0, BUFFER_LENGTH);
                 memset(conn->wbuffer, 0, BUFFER_LENGTH);
                 if (!conn->recv_pending) {
@@ -374,6 +440,235 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     close(result.fd);
 
 				} else if (ret > 0) {
+#if 1
+                    connection_t *conn2 = &p_conn_list[result.fd];
+                    int fd=result.fd;
+                    int ms_flag=0;
+                    for(int i=0;i<client_count;i++){
+                        if(client_fds[i]==fd){
+                            ms_flag=1;
+                            break;
+                        }
+                    }
+                    if(ms_flag==0){
+    #if ENABLE_MS
+                        // 判断是否为 SYNC 消息（比较整个当前缓冲区内容）
+                        connection_t *conn = &p_conn_list[result.fd];
+    #endif
+                        // 处理正常读取：数据已经被写入到 conn->rbuffer + old_rlength
+                        if (result.fd < 0 || result.fd >= MAX_CONN) {
+                            close(result.fd);
+                            continue;
+                        }
+
+                        // 清除 recv_pending（当前 cqe 表示先前提交的 recv 已完成）
+                        connection_t *conn2 = &p_conn_list[result.fd];
+                        conn2->recv_pending = 0;
+
+                        // 更新已接收长度
+                        // 防止越界并计算加入前后的长度
+                        size_t add = (size_t)ret;
+                        if (conn2->rlength + add > BUFFER_LENGTH) {
+                            add = BUFFER_LENGTH - conn2->rlength;
+                            printf("[proactor] Warning: buffer overflow for fd %d, truncating data\n", result.fd);
+                        }
+                        int before_len = conn2->rlength + add; // 包含新数据的总长度
+                        conn2->rlength += add;
+
+    #if ENABLE_MS
+                        if (conn->rlength == (int)strlen(syncc) && memcmp(conn->rbuffer, syncc, conn->rlength) == 0) {
+                            printf("get SYNC fd:%d\n", result.fd);
+                            add_client_fd(result.fd);
+                        }
+    #endif
+
+                        //printf("get msg:%s\n", conn2->rbuffer);
+                        // 如果缓冲区不以 '#' 开头，打印十六进制帮助诊断（协议应以 # 开头）
+                        // if (conn2->rlength > 0 && conn2->rbuffer[0] != '#') {
+                        //     fprintf(stderr, "[proactor] protocol error: buffer does not start with '#', fd=%d, rlength=%d\n", result.fd, conn2->rlength);
+                        //     // 打印前 64 字节的 hex 视图
+                        //     int dump = conn2->rlength < 64 ? conn2->rlength : 64;
+                        //     for (int z = 0; z < dump; z++) {
+                        //         fprintf(stderr, "%02X ", (unsigned char)conn2->rbuffer[z]);
+                        //     }
+                        //     fprintf(stderr, "\n");
+                        // }
+
+                        char *packet = parse_packet(conn2->rbuffer, &conn2->rlength, BUFFER_LENGTH);
+                        if (!packet) {
+                            // parse_packet 返回 NULL 可能表示：
+                            //  - 不完整包（保留在缓冲区，等待后续数据）
+                            //  - 协议错误（parse_packet 会将 *msg_len 置为 0）
+                            if (conn2->rlength == 0) {
+                                // 协议错误：记录并关闭连接
+                                fprintf(stderr, "[proactor] protocol error, closing fd %d, buf='%s'\n", result.fd, conn2->rbuffer);
+                                close(result.fd);
+                                conn2->recv_pending = 0;
+                            } else {
+                                printf("remain buffer:%s\n",conn2->rbuffer);
+                                // 不完整包：什么也不做，等待更多数据（下面会重新注册 recv）
+                                // 可选：打印调试信息但不要退出进程
+                                // fprintf(stderr, "[proactor] incomplete packet, waiting for more data, fd=%d, rlength=%d\n", result.fd, conn2->rlength);
+                            }
+                        } else {
+                            int packet_len = before_len - conn2->rlength;
+                            ret = kvs_handler(packet, packet_len, response);
+                            set_event_send(&ring, result.fd, response, ret, 0);
+                            kvs_free(packet);
+                        }
+
+                        // 立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
+                        size_t avail_after = BUFFER_LENGTH - conn2->rlength;
+                        if (avail_after > 0) {
+                            if (!conn2->recv_pending) {
+                                if (set_event_recv(&ring, result.fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
+                                    fprintf(stderr, "[proactor] set_event_recv failed for fd %d after read\n", result.fd);
+                                    close(result.fd);
+                                    continue;
+                                }
+                                conn2->recv_pending = 1;
+                            }
+                        }
+                    }else if(ms_flag==1){
+                        char *buffer=conn2->rbuffer;
+                        size_t add=ret;
+                        if(conn2->rlength+add>BUFFER_LENGTH){
+                            add=BUFFER_LENGTH - conn2->rlength;
+                            printf("[proactor] Warning: buffer overflow for fd %d, truncating data\n", result.fd);
+                        }
+                        int before_len=conn2->rlength+add; //包含新数据的总长度
+                        conn2->rlength+=add;
+                        int *rlen=&conn2->rlength;
+                        char packet[BUFFER_LENGTH];
+                        int offset=0;
+                        int pack_len=0;
+                        while(1){
+                            if(*rlen-offset<6) break;//缺少header
+                            if(buffer[offset]!='@'){
+                                char *p=memchr(buffer+offset,'@',*rlen - offset);//寻找header起始位置
+                                if(p){
+                                    int skip=p-(buffer+offset);
+                                    memmove(buffer,buffer+offset+skip,*rlen-(offset+skip));
+                                    offset=0;
+                                    continue;
+                                }else{
+                                    printf("[proactor] protocol error: missing '@' in header, fd=%d, rlength=%d\n", fd, *rlen);
+                                    *rlen=0;
+                                    break;
+                                }
+                            }
+                            int msg_id;
+                            int type;
+                            int head_len;
+                            unpack_header(buffer+offset,&msg_id,&type,&head_len);//取出header
+                            buffer+=offset+head_len;
+                            *rlen-=offset+head_len;
+                            offset=0;
+                            if(*rlen<=0) break;//没有数据体
+                            if(type==TYPE_DATA){//处理数据帧
+                                if(buffer[offset]!='#'){
+                                    printf("[proactor] protocol error: data packet does not start with '#', fd=%d, rlength=%d\n", fd, *rlen);
+                                    //数据帧数据缺失，丢弃该包，寻找下一个包
+                                }else{
+                                    char *rn=memmem(buffer,*rlen,"\r\n",2);
+                                    if(!rn){
+                                        break; //数据体不完整，等待后续数据
+                                    }
+                                    int h_len=rn-buffer+2;
+                                    char *pnum=buffer+1;
+                                    char *pnum_end=rn;
+                                    int body_len=0;
+                                    if(pnum>=pnum_end){
+                                        printf("[proactor] protocol error: empty data length, fd=%d\n", fd);
+                                        //数据帧数据错误，丢弃该包，寻找下一个包
+                                        continue;
+                                    }
+                                    for(char *t=pnum;t<pnum_end;t++){
+                                        if(!isdigit((unsigned char)*t)){
+                                            printf("[proactor] protocol error: invalid digit in data length, fd=%d\n", fd);
+                                            //数据帧数据错误，丢弃该包，寻找下一个包
+                                            continue;
+                                        }
+                                        body_len=body_len*10+(*t - '0');
+                                        if(body_len<0){ //overflow check (defensive)
+                                            printf("[proactor] protocol error: data length overflow, fd=%d\n", fd);
+                                            //数据帧数据错误，丢弃该包，寻找下一个包
+                                            continue;
+                                        }
+                                    }
+                                    if(body_len<0){
+                                        printf("[proactor] protocol error: negative data length, fd=%d\n", fd);
+                                        //数据帧数据错误，丢弃该包，寻找下一个包
+                                        continue;
+                                    }
+                                    if(body_len>*rlen - h_len){
+                                        //数据体不完整，等待后续数据
+                                        break;
+                                    }
+                                    //完整数据包，处理之
+                                    memcpy(packet+pack_len,buffer,h_len+body_len);
+                                    pack_len+=h_len+body_len;
+                                    memmove(buffer,buffer+h_len+body_len,*rlen - (h_len+body_len));
+                                    *rlen-=h_len+body_len;
+                                    offset=0;
+                                }
+
+                            }else if(type==TYPE_ACK){//处理确认帧
+                                Node *curr=conn2->send_queue_head;
+                                if(msg_id<=conn2->retransmit_count){
+                                    //已经确认过的包，忽略
+                                }else if(msg_id==conn2->retransmit_count+1){
+                                    //正常确认，移除队列头
+                                    if(curr){
+                                        conn2->send_queue_head=curr->next;
+                                        kvs_free(curr->msg);
+                                        kvs_free(curr);
+                                        conn2->queue_size--;
+                                        conn2->retransmit_count++;
+                                    }else{
+                                        //没有待确认的数据包，可能是协议错误
+                                        printf("[proactor] protocol error: no pending packets to ack, fd=%d\n", fd);
+                                    }
+
+                                }else{
+                                    //需要重传多个包
+                                    int to_retransmit=msg_id - (conn2->retransmit_count+1);
+                                    for(int i=0;i<to_retransmit;i++){
+                                        if(curr){
+                                            //重传数据包
+                                            set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
+                                            curr=curr->next;
+                                            //conn2->retransmit_count++;
+                                        }else{
+                                            //没有足够的数据包，可能是协议错误
+                                            printf("[proactor] protocol error: insufficient packets to ack, fd=%d\n", fd);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+
+                        }
+                        ret=kvs_handler(packet,pack_len,response);
+                        set_event_send(&ring, result.fd, response, ret, 0);
+                        //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
+                        size_t avail_after = BUFFER_LENGTH - conn2->rlength;
+                        if (avail_after > 0) {
+                            if (!conn2->recv_pending) {
+                                if (set_event_recv(&ring, result.fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
+                                    fprintf(stderr, "[proactor] set_event_recv failed for fd %d after read\n", result.fd);
+                                    close(result.fd);
+                                    continue;
+                                }
+                                conn2->recv_pending = 1;
+                            }
+                        }
+                    }
+                    
+
+#endif
+#if 0
 #if ENABLE_MS
                     // 判断是否为 SYNC 消息（比较整个当前缓冲区内容）
                     connection_t *conn = &p_conn_list[result.fd];
@@ -428,6 +723,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             close(result.fd);
                             conn2->recv_pending = 0;
                         } else {
+                            printf("remain buffer:%s\n",conn2->rbuffer);
                             // 不完整包：什么也不做，等待更多数据（下面会重新注册 recv）
                             // 可选：打印调试信息但不要退出进程
                             // fprintf(stderr, "[proactor] incomplete packet, waiting for more data, fd=%d, rlength=%d\n", result.fd, conn2->rlength);
@@ -451,6 +747,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             conn2->recv_pending = 1;
                         }
                     }
+#endif 
 				}
 			}  else if (result.event == EVENT_WRITE) {
   //
