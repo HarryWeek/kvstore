@@ -661,6 +661,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         }
                         ret=kvs_handler(packet,pack_len,response);
                         set_event_send(&ring, result.fd, response, ret, 0);
+                        conn2->recv_pending=0;
                         //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
                         size_t avail_after = BUFFER_LENGTH - conn2->rlength;
                         printf("after process remain len:%d\n",conn2->rlength);
