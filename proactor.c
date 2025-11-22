@@ -614,6 +614,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                     memmove(buffer,buffer+h_len+body_len,*rlen - (h_len+body_len));
                                     *rlen-=h_len+body_len;
                                     offset=0;
+                                    char *ack_msg=pack_header("",0,msg_id,TYPE_ACK);
+                                    set_event_send(&ring,fd,ack_msg,strlen(ack_msg),0);
+                                    printf("[proactor] data packet received msg_id=%d from fd=%d, sending ack\n", msg_id, fd);
                                 }
 
                             }else if(type==TYPE_ACK){//处理确认帧
