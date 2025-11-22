@@ -581,6 +581,10 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         *rlen=*rlen - (p - buffer);
                                         offset=0;
                                         continue;
+                                    }else{
+                                        //没有找到下一个包，清空缓冲区
+                                        *rlen=0;
+                                        break;
                                     }
                                 }else{
                                     char *rn=memmem(buffer+head_len,*rlen,"\r\n",2);
