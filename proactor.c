@@ -128,7 +128,7 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_tail->next=NULL;
             c->queue_size++;
         }
-        set_event_send(&ring, fd,msg, len, 0);
+        set_event_send(&ring, fd,packet, strlen(packet), 0);
 		//printf("send: ");
 		//print_visible(msg);
 		//printf(" to fd:%d i:%d\n", fd, i);
@@ -542,6 +542,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         char packet[BUFFER_LENGTH];
                         int offset=0;
                         int pack_len=0;
+                        print_visible(buffer);
+                        printf("\n");
                         while(1){
                             if(*rlen-offset<6) break;//缺少header
                             if(buffer[offset]!='@'){
@@ -625,6 +627,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         kvs_free(curr);
                                         conn2->queue_size--;
                                         conn2->retransmit_count++;
+                                        printf("[proactor] ack received for msg_id=%d from fd=%d\n", conn2->retransmit_count, fd);
                                     }else{
                                         //没有待确认的数据包，可能是协议错误
                                         printf("[proactor] protocol error: no pending packets to ack, fd=%d\n", fd);
@@ -637,6 +640,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         if(curr){
                                             //重传数据包
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
+                                            printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+1, fd);
                                             curr=curr->next;
                                             //conn2->retransmit_count++;
                                         }else{
@@ -654,6 +658,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         set_event_send(&ring, result.fd, response, ret, 0);
                         //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
                         size_t avail_after = BUFFER_LENGTH - conn2->rlength;
+                        printf("after process remain len:%d\n",conn2->rlength);
                         if (avail_after > 0) {
                             if (!conn2->recv_pending) {
                                 if (set_event_recv(&ring, result.fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
