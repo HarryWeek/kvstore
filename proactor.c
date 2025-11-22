@@ -362,7 +362,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
 			printf("[proactor] Connected to master (fd=%d)\n", master_fd);
 			
 			//proactor_broadcast(sync,strlen(sync));
-			kvs_sync_msg(syncc,strlen(syncc));
+			//kvs_sync_msg(syncc,strlen(syncc));
+            set_event_send(&ring, master_fd, syncc, strlen(syncc), 0);
 		} else {
 			fprintf(stderr, "[proactor] Failed to connect master %s:%d\n", master_ip, port);
 		}
