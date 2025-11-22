@@ -544,9 +544,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         char packet[BUFFER_LENGTH];
                         int offset=0;
                         int pack_len=0;
-                        printf("get buffer:");
-                        print_visible(buffer);
-                        printf("\n");
+                        // printf("get buffer:");
+                        // print_visible(buffer);
+                        // printf("\n");
                         while(1){
                             if(*rlen-offset<6) break;//缺少header
                             if(buffer[offset]!='@'){
@@ -622,6 +622,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                     offset=0;
                                     char *ack_msg=pack_header("",0,msg_id,TYPE_ACK);
                                     set_event_send(&ring,fd,ack_msg,strlen(ack_msg),0);
+                                    io_uring_submit(&ring);
                                     printf("[proactor] data packet received msg_id=%d from fd=%d, sending ack\n", msg_id, fd);
                                 }
 
@@ -672,7 +673,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         conn2->recv_pending=0;
                         //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
                         size_t avail_after = BUFFER_LENGTH - conn2->rlength;
-                        printf("after process remain len:%d\n",conn2->rlength);
+                        //printf("after process remain len:%d\n",conn2->rlength);
                         conn2->rbuffer[conn2->rlength]='\0';
                         if(conn2->rlength>0){
                             printf("remain buffer:");
