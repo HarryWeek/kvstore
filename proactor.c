@@ -86,7 +86,8 @@ void print_visible(char *msg) {
 
 char *pack_header(char* msg,int len,int msg_id,int type){
     char* p=kvs_malloc(BUFFER_LENGTH);
-    sprintf(p,"@%d^%d\r\n%s",msg_id,type,msg);
+    int p_len=sprintf(p,"@%d^%d\r\n%s",msg_id,type,msg);
+    p[p_len]='\0';
     return p;
 }
 int unpack_header(char* msg,int* msg_id,int* type,int *head_len){
@@ -129,9 +130,9 @@ int proactor_broadcast( char *msg, size_t len) {
             c->queue_size++;
         }
         set_event_send(&ring, fd,packet, strlen(packet), 0);
-		//printf("send: ");
-		//print_visible(msg);
-		//printf(" to fd:%d i:%d\n", fd, i);
+		printf("send: ");
+		print_visible(packet);
+		printf(" to fd:%d i:%d\n", fd, i);
     }
 
     // 提交所有发送任务
@@ -564,7 +565,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             int type;
                             int head_len;
                             unpack_header(buffer+offset,&msg_id,&type,&head_len);//取出header
-                            buffer+=offset+head_len;
+                            memmove(buffer,buffer+offset+head_len,*rlen - (offset+head_len));
                             *rlen-=offset+head_len;
                             offset=0;
                             if(*rlen<=0) break;//没有数据体
@@ -644,9 +645,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         if(curr){
                                             //重传数据包
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
-                                            printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+1, fd);
+                                            printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
                                             curr=curr->next;
-                                            //conn2->retransmit_count++;
+                                            conn2->retransmit_count++;
                                         }else{
                                             //没有足够的数据包，可能是协议错误
                                             printf("[proactor] protocol error: insufficient packets to ack, fd=%d\n", fd);
@@ -663,6 +664,11 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
                         size_t avail_after = BUFFER_LENGTH - conn2->rlength;
                         printf("after process remain len:%d\n",conn2->rlength);
+                        if(conn2->rlength>0){
+                            printf("remain buffer:");
+                            print_visible(conn2->rbuffer);
+                            printf("\n");
+                        }
                         if (avail_after > 0) {
                             if (!conn2->recv_pending) {
                                 if (set_event_recv(&ring, result.fd, conn2->rbuffer + conn2->rlength, avail_after, 0) < 0) {
