@@ -544,6 +544,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         char packet[BUFFER_LENGTH];
                         int offset=0;
                         int pack_len=0;
+                        printf("get buffer:");
                         print_visible(buffer);
                         printf("\n");
                         while(1){
@@ -565,21 +566,22 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             int type;
                             int head_len;
                             unpack_header(buffer+offset,&msg_id,&type,&head_len);//取出header
-                            memmove(buffer,buffer+offset+head_len,*rlen - (offset+head_len));
-                            *rlen-=offset+head_len;
+                            //memmove(buffer,buffer+offset+head_len,*rlen - (offset+head_len));
+                            
+                            //*rlen-=offset+head_len;
                             offset=0;
                             if(*rlen<=0) break;//没有数据体
                             if(type==TYPE_DATA){//处理数据帧
-                                if(buffer[offset]!='#'){
+                                if(buffer[head_len]!='#'){
                                     printf("[proactor] protocol error: data packet does not start with '#', fd=%d, rlength=%d\n", fd, *rlen);
                                     //数据帧数据缺失，丢弃该包，寻找下一个包
                                 }else{
-                                    char *rn=memmem(buffer,*rlen,"\r\n",2);
+                                    char *rn=memmem(buffer+head_len,*rlen,"\r\n",2);
                                     if(!rn){
                                         break; //数据体不完整，等待后续数据
                                     }
-                                    int h_len=rn-buffer+2;
-                                    char *pnum=buffer+1;
+                                    int h_len=rn-(buffer+head_len)+2;
+                                    char *pnum=buffer+head_len+1;
                                     char *pnum_end=rn;
                                     int body_len=0;
                                     if(pnum>=pnum_end){
@@ -610,10 +612,13 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         break;
                                     }
                                     //完整数据包，处理之
-                                    memcpy(packet+pack_len,buffer,h_len+body_len);
+                                    memcpy(packet+pack_len,buffer+head_len,h_len+body_len);
                                     pack_len+=h_len+body_len;
-                                    memmove(buffer,buffer+h_len+body_len,*rlen - (h_len+body_len));
-                                    *rlen-=h_len+body_len;
+                                    memmove(buffer,buffer+head_len+h_len+body_len,*rlen - (h_len+body_len+head_len));
+                                    // printf("remove header:");
+                                    // print_visible(buffer);
+                                    // printf("\n");
+                                    *rlen-=h_len+body_len+head_len;
                                     offset=0;
                                     char *ack_msg=pack_header("",0,msg_id,TYPE_ACK);
                                     set_event_send(&ring,fd,ack_msg,strlen(ack_msg),0);
@@ -622,6 +627,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
                             }else if(type==TYPE_ACK){//处理确认帧
                                 Node *curr=conn2->send_queue_head;
+                                memmove(buffer,buffer+head_len,*rlen - head_len);
+                                *rlen-=head_len;
+                                offset=0;
                                 if(msg_id<=conn2->retransmit_count){
                                     //已经确认过的包，忽略
                                 }else if(msg_id==conn2->retransmit_count+1){
@@ -665,6 +673,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         //立即为该 fd 重新注册 recv（使用当前剩余空间），避免只在 write 完成后才重置
                         size_t avail_after = BUFFER_LENGTH - conn2->rlength;
                         printf("after process remain len:%d\n",conn2->rlength);
+                        conn2->rbuffer[conn2->rlength]='\0';
                         if(conn2->rlength>0){
                             printf("remain buffer:");
                             print_visible(conn2->rbuffer);
