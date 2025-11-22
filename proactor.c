@@ -575,6 +575,13 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 if(buffer[head_len]!='#'){
                                     printf("[proactor] protocol error: data packet does not start with '#', fd=%d, rlength=%d\n", fd, *rlen);
                                     //数据帧数据缺失，丢弃该包，寻找下一个包
+                                    char *p=memchr(buffer+head_len,'@',*rlen - head_len);//寻找header起始位置
+                                    if(p){
+                                        memmove(buffer,buffer+(p - buffer),*rlen - (p - buffer));
+                                        *rlen=*rlen - (p - buffer);
+                                        offset=0;
+                                        continue;
+                                    }
                                 }else{
                                     char *rn=memmem(buffer+head_len,*rlen,"\r\n",2);
                                     if(!rn){
