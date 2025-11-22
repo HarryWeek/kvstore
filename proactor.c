@@ -559,6 +559,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 }else{
                                     printf("[proactor] protocol error: missing '@' in header, fd=%d, rlength=%d\n", fd, *rlen);
                                     *rlen=0;
+                                    printf("buffer:");
+                                    print_visible(buffer);
+                                    printf("\n");
                                     break;
                                 }
                             }
