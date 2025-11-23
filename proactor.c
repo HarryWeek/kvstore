@@ -15,10 +15,10 @@
 #define EVENT_WRITE		2
 #define TYPE_DATA       0
 #define TYPE_ACK        1
-#define ENTRIES_LENGTH		1024
+#define ENTRIES_LENGTH		4096
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
-#define EXPIRE_TIME 60000  // 重传超时时间，单位毫秒
+#define EXPIRE_TIME 3000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
 void check_retransmit(int fd);
@@ -384,8 +384,16 @@ int set_event_accept(struct io_uring *ring, int sockfd, struct sockaddr *addr,
 void handler_ack(connection_t *conn,int msg_id,int fd){
     Node *curr=conn->send_queue_head;
     Node *prev=NULL;
+    if(msg_id==1){
+        curr=curr->next;
+        while(curr!=NULL){
+            curr->expire_at=now_ms()+EXPIRE_TIME;
+        }
+    }
+    curr=conn->send_queue_head;
     while(curr!=NULL){
         if(curr->msg_id==msg_id){
+            printf("[proactor] Received ACK for msg_id=%d from fd=%d\n", msg_id, fd);
             //仅删除该节点
             if(prev==NULL){//删除头节点
                 conn->send_queue_head=curr->next;
@@ -420,6 +428,9 @@ void check_retransmit(int fd){
         }
     }
     connection_t *conn=&p_conn_list[fd];
+    // if(conn->send_queue_head->msg_id==1){
+    //     return; //初始消息，不重传
+    // }
     uint64_t now=now_ms();
     Node *curr=conn->send_queue_head;
     while(curr!=NULL){
@@ -520,19 +531,19 @@ int proactor_start(unsigned short port, msg_handler handler) {
         int curr_ms=now_ms();
         if(curr_ms-old_time>=1000){
             //每秒检查一次重传
-            //printf("[proactor] Checking retransmissions...\n");
+            printf("[proactor] Checking retransmissions...\n");
             old_time=curr_ms;;
             for(int i=0;i<client_count;i++){
                 int fd=client_fds[i];
                 check_retransmit(fd);
             }
         }
-		//struct io_uring_cqe *cqe;
-		//io_uring_wait_cqe(&ring, &cqe);
+		struct io_uring_cqe *cqe;
+		io_uring_wait_cqe(&ring, &cqe);
 
 		struct io_uring_cqe *cqes[128];
 		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // epoll_wait
-        
+        //printf("nready:%d\n",nready);
 		int i = 0;
 		for (i = 0;i < nready;i ++) {
 
@@ -737,7 +748,20 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             int msg_id;
                             int type;
                             int head_len;
-                            unpack_header(buffer+offset,&msg_id,&type,&head_len);//取出header
+                            if(unpack_header(buffer+offset,&msg_id,&type,&head_len) < 0){
+                                // header解析失败，寻找下一个@
+                                char *p=memchr(buffer+offset+1,'@',*rlen - offset - 1);
+                                if(p){
+                                    int skip=p-(buffer+offset);
+                                    memmove(buffer,buffer+offset+skip,*rlen-(offset+skip));
+                                    offset=0;
+                                    continue;
+                                }else{
+                                    //没有找到下一个包，清空缓冲区
+                                    *rlen=0;
+                                    break;
+                                }
+                            }
                             //memmove(buffer,buffer+offset+head_len,*rlen - (offset+head_len));
                             
                             //*rlen-=offset+head_len;
@@ -830,11 +854,15 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
                             }else if(type==TYPE_ACK){//处理确认帧
                                 handler_ack(conn2,msg_id,fd);
-#if 0
-                                Node *curr=conn2->send_queue_head;
+                                // 从缓冲区中移除已处理的ACK帧头部
                                 memmove(buffer,buffer+head_len,*rlen - head_len);
                                 *rlen-=head_len;
                                 offset=0;
+                                // 继续处理下一个包
+                                //printf("zuse\n");
+                                continue;
+#if 0
+                                Node *curr=conn2->send_queue_head;
                                 // while(curr->msg_id<conn2->retransmit_count){
                                 //     //kvs_free(curr->msg);
                                 //     curr=curr->next;
@@ -901,6 +929,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         // 立即批量发送所有待发送的ack消息（在kvs_handler之前，避免被阻塞）
                         ack_msg_t *ack_curr = conn2->ack_queue_head;
                         while(ack_curr != NULL){
+                            printf("[proactor] sending ACK to fd=%d: %s\n", fd, ack_curr->msg);
                             set_event_send(&ring, fd, ack_curr->msg, strlen(ack_curr->msg), 0);
                             ack_curr = ack_curr->next;
                         }
