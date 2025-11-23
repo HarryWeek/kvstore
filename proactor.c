@@ -18,7 +18,7 @@
 #define ENTRIES_LENGTH		4096
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
-#define EXPIRE_TIME 3000  // 重传超时时间，单位毫秒
+#define EXPIRE_TIME 90000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
 void check_retransmit(int fd);
@@ -384,14 +384,14 @@ int set_event_accept(struct io_uring *ring, int sockfd, struct sockaddr *addr,
 void handler_ack(connection_t *conn,int msg_id,int fd){
     Node *curr=conn->send_queue_head;
     Node *prev=NULL;
-    if(msg_id==1 && curr != NULL){
-        // 当收到msg_id=1的ACK时，重置后续所有消息的超时时间
-        Node *temp = curr->next;
-        while(temp != NULL){
-            temp->expire_at=now_ms()+EXPIRE_TIME;
-            temp = temp->next;
-        }
-    }
+    // if(msg_id==1 && curr != NULL){
+    //     // 当收到msg_id=1的ACK时，重置后续所有消息的超时时间
+    //     Node *temp = curr->next;
+    //     while(temp != NULL){
+    //         temp->expire_at=now_ms()+EXPIRE_TIME;
+    //         temp = temp->next;
+    //     }
+    // }
     curr=conn->send_queue_head;
     while(curr!=NULL){
         if(curr->msg_id==msg_id){
@@ -438,6 +438,7 @@ void check_retransmit(int fd){
     while(curr!=NULL){
         if(now>=curr->expire_at){
             //超时，重传
+            printf("now:%llu, expire_at:%llu\n", (unsigned long long)now, (unsigned long long)curr->expire_at);
             set_event_send(&ring, fd, curr->msg, strlen(curr->msg), 0);
             io_uring_submit(&ring);
             curr->expire_at=now+EXPIRE_TIME*(curr->retry_count+1); //指数退避
@@ -525,17 +526,38 @@ int proactor_start(unsigned short port, msg_handler handler) {
 	}
 
 #endif
-    int old_time=now_ms();
+    uint64_t old_time=now_ms();
 	while (1) {
 
 		io_uring_submit(&ring);
 
+		// 在处理事件之前先检查重传（避免在处理ACK之前就重传）
+		uint64_t curr_ms=now_ms();
+		if(curr_ms-old_time>=1000){
+			//每秒检查一次重传
+			printf("[proactor] Checking retransmissions...\n");
+			old_time=curr_ms;
+			for(int i=0;i<client_count;i++){
+				int fd=client_fds[i];
+				check_retransmit(fd);
+			}
+		}
 
 		// 使用peek_batch_cqe非阻塞地获取完成事件
-         struct io_uring_cqe *cqe;
-        io_uring_wait_cqe(&ring, &cqe);
 		struct io_uring_cqe *cqes[128];
 		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);
+		
+		// 如果没有完成事件，等待一个事件（避免CPU空转）
+		// if (nready == 0) {
+		// 	struct io_uring_cqe *cqe;
+		// 	io_uring_wait_cqe(&ring, &cqe);
+		// 	// 将等待的cqe添加到批处理数组中
+		// 	cqes[0] = cqe;
+		// 	nready = 1;
+		// 	// 等待后可能还有更多完成事件，再次peek获取
+		// 	int more = io_uring_peek_batch_cqe(&ring, cqes + 1, 127);
+		// 	nready += more;
+		// }
 		
 		// // 如果没有完成事件，等待一个事件（避免CPU空转）
 		// if (nready == 0) {
@@ -1107,16 +1129,6 @@ int proactor_start(unsigned short port, msg_handler handler) {
 		}
 
 		io_uring_cq_advance(&ring, nready);
-        int curr_ms=now_ms();
-        if(curr_ms-old_time>=1000){
-            //每秒检查一次重传
-            printf("[proactor] Checking retransmissions...\n");
-            old_time=curr_ms;;
-            for(int i=0;i<client_count;i++){
-                int fd=client_fds[i];
-                check_retransmit(fd);
-            }
-        }
 	}
 
 }
