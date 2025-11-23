@@ -647,7 +647,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                     char *ack_msg=pack_header("",0,msg_id,TYPE_ACK);
                                     set_event_send(&ring,fd,ack_msg,strlen(ack_msg),0);
                                     io_uring_submit(&ring);
-                                    printf("[proactor] data packet received msg_id=%d from fd=%d, sending ack\n", msg_id, fd);
+                                    //printf("[proactor] data packet received msg_id=%d from fd=%d, sending ack\n", msg_id, fd);
                                 }
 
                             }else if(type==TYPE_ACK){//处理确认帧
@@ -678,9 +678,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                     for(int i=0;i<to_retransmit;i++){
                                         if(curr){
                                             //重传数据包
-                                            printf("[proactor] retransmit msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
-                                            print_visible(curr->msg);
-                                            printf("\n");
+                                            //printf("[proactor] retransmit msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
+                                            //print_visible(curr->msg);
+                                            //printf("\n");
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
                                             printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
                                             io_uring_submit(&ring);
