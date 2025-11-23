@@ -16,6 +16,7 @@
 #define ENTRIES_LENGTH		1024
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
+#define EXPIRE_TIME 3000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
 #if ENABLE_MS
@@ -29,6 +30,8 @@ extern struct io_uring ring;  // 引用主loop的全局ring
 typedef struct Node{
     char *msg;
     int msg_id;
+    uint64_t expire_at;  // 超时时间点（毫秒）
+    int retry_count;
     struct Node* next;
 }Node;
 
@@ -83,7 +86,11 @@ void print_visible(char *msg) {
         }
     }
 }
-
+uint64_t now_ms() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
 char *pack_header(char* msg,int len,int msg_id,int type){
     char* p=kvs_malloc(BUFFER_LENGTH);
     int p_len=sprintf(p,"@%d^%d\r\n%s",msg_id,type,msg);
@@ -120,6 +127,8 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_head=(Node*)kvs_malloc(sizeof(Node));
             c->send_queue_head->msg=packet;
             c->send_queue_head->next=NULL;
+            c->send_queue_head->expire_at=now_ms()+EXPIRE_TIME;
+            c->send_queue_head->retry_count=0;
             c->send_queue_tail=c->send_queue_head;
             c->queue_size=1;
         }else{
@@ -127,6 +136,8 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_tail=c->send_queue_tail->next;
             c->send_queue_tail->msg=packet;
             c->send_queue_tail->next=NULL;
+            c->send_queue_tail->expire_at=now_ms()+EXPIRE_TIME;
+            c->send_queue_tail->retry_count=0;
             c->queue_size++;
         }
         set_event_send(&ring, fd,packet, strlen(packet), 0);
@@ -295,6 +306,58 @@ int set_event_accept(struct io_uring *ring, int sockfd, struct sockaddr *addr,
     memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
     return 0;
 
+}
+
+void handler_ack(connection_t *conn,int msg_id,int fd){
+    Node *curr=conn->send_queue_head;
+    Node *prev=NULL;
+    while(curr!=NULL){
+        if(curr->msg_id==msg_id){
+            //仅删除该节点
+            if(prev==NULL){//删除头节点
+                conn->send_queue_head=curr->next;
+                if(conn->send_queue_head==NULL){
+                    conn->send_queue_tail=NULL;
+                }
+            }else{
+                prev->next=curr->next;
+                if(curr==conn->send_queue_tail){
+                    conn->send_queue_tail=prev;
+                }
+            }
+            kvs_free(curr->msg);
+            kvs_free(curr);
+            conn->queue_size--;
+            break;
+        }else{
+            prev=curr;
+            curr=curr->next;
+        }
+    }
+}
+
+void check_retransmit(int fd){
+    for(int i=0;i<client_count;i++){
+        if(client_fds[i]==fd){
+            break;
+        }
+        if(i==client_count-1){
+            return; //fd不在客户端列表中
+        }
+    }
+    connection_t *conn=&p_conn_list[fd];
+    uint64_t now=now_ms();
+    Node *curr=conn->send_queue_head;
+    while(curr!=NULL){
+        if(now>=curr->expire_at){
+            //超时，重传
+            set_event_send(&ring, fd, curr->msg, strlen(curr->msg), 0);
+            curr->expire_at=now+EXPIRE_TIME*(curr->retry_count+1); //指数退避
+            curr->retry_count++;
+            printf("[proactor] retransmit msg_id=%d to fd=%d, retry_count=%d\n", curr->msg_id, fd, curr->retry_count);
+        }
+        curr=curr->next;
+    }
 }
 
 extern char syncc[1024];
@@ -651,10 +714,20 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                 }
 
                             }else if(type==TYPE_ACK){//处理确认帧
+                                handler_ack(conn2,msg_id,fd);
+#if 0
                                 Node *curr=conn2->send_queue_head;
                                 memmove(buffer,buffer+head_len,*rlen - head_len);
                                 *rlen-=head_len;
                                 offset=0;
+                                // while(curr->msg_id<conn2->retransmit_count){
+                                //     //kvs_free(curr->msg);
+                                //     curr=curr->next;
+                                //     //kvs_free(conn2->send_queue_head);
+                                //     conn2->send_queue_head=curr;
+                                //     conn2->queue_size--;
+                                    
+                                // }
                                 if(msg_id<=conn2->retransmit_count){
                                     //已经确认过的包，忽略
                                 }else if(msg_id==conn2->retransmit_count+1){
@@ -681,6 +754,14 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                             //printf("[proactor] retransmit msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
                                             //print_visible(curr->msg);
                                             //printf("\n");
+                                            // while(curr==NULL||curr->msg_id<conn2->retransmit_count+i){
+                                            //     //kvs_free(curr->msg);
+                                            //     Node* temp=curr;
+                                            //     curr=curr->next;
+                                            //     //kvs_free(temp);
+                                            //     conn2->send_queue_head=curr;
+                                            //     conn2->queue_size--;
+                                            // }
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
                                             printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
                                             io_uring_submit(&ring);
@@ -689,7 +770,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                             //kvs_free(curr->msg);
                                             //kvs_free(curr);
                                             curr=curr->next;
-                                            conn2->retransmit_count++;
+                                            conn2->retransmit_count=curr->msg_id;
                                         }else{
                                             //没有足够的数据包，可能是协议错误
                                             printf("[proactor] protocol error: insufficient packets to ack, fd=%d\n", fd);
@@ -697,6 +778,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                         }
                                     }
                                 }
+#endif
                             }
 
 
@@ -848,10 +930,12 @@ int proactor_start(unsigned short port, msg_handler handler) {
             }
 				
 			}
+            check_retransmit(result.fd);
 			
 		}
 
 		io_uring_cq_advance(&ring, nready);
+        
 	}
 
 }
