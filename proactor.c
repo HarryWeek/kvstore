@@ -85,6 +85,46 @@ static void remove_client_fd(int fd) {
         }
     }
 }
+
+// 清理连接资源并关闭连接
+static void cleanup_connection(int fd) {
+    if (fd < 0 || fd >= MAX_CONN) {
+        return;
+    }
+    
+    connection_t *conn = &p_conn_list[fd];
+    
+    // 清理ack队列
+    ack_msg_t *ack_curr = conn->ack_queue_head;
+    while(ack_curr != NULL){
+        ack_msg_t *ack_next = ack_curr->next;
+        kvs_free(ack_curr->msg);
+        kvs_free(ack_curr);
+        ack_curr = ack_next;
+    }
+    conn->ack_queue_head = NULL;
+    conn->ack_queue_tail = NULL;
+    
+    // 清理send队列
+    Node *node_curr = conn->send_queue_head;
+    while(node_curr != NULL){
+        Node *node_next = node_curr->next;
+        kvs_free(node_curr->msg);
+        kvs_free(node_curr);
+        node_curr = node_next;
+    }
+    conn->send_queue_head = NULL;
+    conn->send_queue_tail = NULL;
+    conn->queue_size = 0;
+    
+    // 从客户端列表中移除
+    remove_client_fd(fd);
+    
+    // 重置连接状态
+    conn->recv_pending = 0;
+    conn->rlength = 0;
+    conn->wlength = 0;
+}
 void print_visible(char *msg) {
     for (char *p = msg; *p; p++) {
         if (*p == '\r') {
@@ -554,11 +594,20 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
 				if (ret == 0) {
                     // remote closed
-                    if (result.fd >=0 && result.fd < MAX_CONN) {
-                        p_conn_list[result.fd].recv_pending = 0;
-                    }
+                    printf("[proactor] connection closed by peer, fd=%d\n", result.fd);
+                    cleanup_connection(result.fd);
                     close(result.fd);
-
+                    continue;
+				} else if (ret < 0) {
+                    // recv error
+                    if (ret == -ECONNRESET || ret == -EPIPE) {
+                        printf("[proactor] connection reset/closed on read, fd=%d: %s\n", result.fd, strerror(-ret));
+                    } else {
+                        fprintf(stderr, "[proactor] recv error on fd %d: %s\n", result.fd, strerror(-ret));
+                    }
+                    cleanup_connection(result.fd);
+                    close(result.fd);
+                    continue;
 				} else if (ret > 0) {
 #if 1
                     //int current_time=now_ms();
@@ -982,8 +1031,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 if(ret==-EPIPE||ret==-ECONNRESET){
                     // 连接被对端关闭
                     fprintf(stderr, "[proactor] write error on fd %d: %s, closing connection\n", result.fd, strerror(-ret));
+                    cleanup_connection(result.fd);
                     close(result.fd);
-                    remove_client_fd(result.fd);
                     continue;
                 }else{
                     //fprintf(stderr, "[proactor] write error on fd %d: %s\n", result.fd, strerror(-ret));
