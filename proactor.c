@@ -683,11 +683,11 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                             printf("\n");
                                             set_event_send(&ring,fd,curr->msg,strlen(curr->msg),0);
                                             printf("[proactor] retransmit packet msg_id=%d to fd=%d\n", conn2->retransmit_count+i, fd);
-                    
+                                            io_uring_submit(&ring);
                                             conn2->send_queue_head=curr->next;
                                             conn2->queue_size--;
-                                            kvs_free(curr->msg);
-                                            kvs_free(curr);
+                                            //kvs_free(curr->msg);
+                                            //kvs_free(curr);
                                             curr=curr->next;
                                             conn2->retransmit_count++;
                                         }else{
