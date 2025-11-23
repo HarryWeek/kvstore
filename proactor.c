@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 
 #define EVENT_ACCEPT   	0
+#include <netinet/tcp.h>
+#include <fcntl.h>
 #define EVENT_READ		1
 #define EVENT_WRITE		2
 #define TYPE_DATA       0
@@ -16,9 +18,10 @@
 #define ENTRIES_LENGTH		1024
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
-#define EXPIRE_TIME 6000  // 重传超时时间，单位毫秒
+#define EXPIRE_TIME 80000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
+void check_retransmit(int fd);
 #if ENABLE_MS
 
 extern int client_fds[MAX_CLIENTS];
@@ -130,6 +133,7 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_head->expire_at=now_ms()+EXPIRE_TIME;
             c->send_queue_head->retry_count=0;
             c->send_queue_tail=c->send_queue_head;
+            c->send_queue_head->msg_id=p_conn_list[fd].msg_id -1;
             //c->msg_id++;
             c->queue_size=1;
         }else{
@@ -139,13 +143,14 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_tail->next=NULL;
             c->send_queue_tail->expire_at=now_ms()+EXPIRE_TIME;
             c->send_queue_tail->retry_count=0;
+            c->send_queue_tail->msg_id=p_conn_list[fd].msg_id -1;
             //c->msg_id++;
             c->queue_size++;
         }
         set_event_send(&ring, fd,packet, strlen(packet), 0);
-		printf("send: ");
-		print_visible(packet);
-		printf(" to fd:%d i:%d\n", fd, i);
+		// printf("send: ");
+		// print_visible(packet);
+		// printf(" to fd:%d i:%d\n", fd, i);
     }
 
     // 提交所有发送任务
@@ -177,6 +182,13 @@ int proactor_connect(char *master_ip, unsigned short conn_port) {
     }
 
     // 建立成功，加入客户端列表
+    // Disable Nagle and set non-blocking on the outbound connection
+    {
+        int nagle_off = 1;
+        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &nagle_off, sizeof(nagle_off));
+        int f = fcntl(sockfd, F_GETFL, 0);
+        if (f >= 0) fcntl(sockfd, F_SETFL, f | O_NONBLOCK);
+    }
     add_client_fd(sockfd);
     // 初始化连接结构体
     connection_t *conn = &p_conn_list[sockfd];
@@ -337,6 +349,7 @@ void handler_ack(connection_t *conn,int msg_id,int fd){
             curr=curr->next;
         }
     }
+    //check_retransmit(fd);
 }
 
 void check_retransmit(int fd){
@@ -439,25 +452,34 @@ int proactor_start(unsigned short port, msg_handler handler) {
 	}
 
 #endif
-
+    int old_time=now_ms();
 	while (1) {
 
 		io_uring_submit(&ring);
 
-
+        int curr_ms=now_ms();
+        if(curr_ms-old_time>=1000){
+            //每秒检查一次重传
+            //printf("[proactor] Checking retransmissions...\n");
+            old_time=curr_ms;;
+            for(int i=0;i<client_count;i++){
+                int fd=client_fds[i];
+                check_retransmit(fd);
+            }
+        }
 		//struct io_uring_cqe *cqe;
 		//io_uring_wait_cqe(&ring, &cqe);
 
 		struct io_uring_cqe *cqes[128];
 		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // epoll_wait
-
+        
 		int i = 0;
 		for (i = 0;i < nready;i ++) {
 
 			struct io_uring_cqe *entries = cqes[i];
 			struct conn_info result;
 			memcpy(&result, &entries->user_data, sizeof(struct conn_info));
-            check_retransmit(result.fd);
+            
 			if (result.event == EVENT_ACCEPT) {
 
                 if (set_event_accept(&ring, sockfd, (struct sockaddr*)&clientaddr, &len, 0) < 0) {
@@ -469,6 +491,13 @@ int proactor_start(unsigned short port, msg_handler handler) {
                 if (connfd < 0) {
                     // accept returned error
                     continue;
+                }
+                // disable Nagle on the accepted socket and make it non-blocking
+                {
+                    int nagle_off = 1;
+                    setsockopt(connfd, IPPROTO_TCP, TCP_NODELAY, &nagle_off, sizeof(nagle_off));
+                    int f = fcntl(connfd, F_GETFL, 0);
+                    if (f >= 0) fcntl(connfd, F_SETFL, f | O_NONBLOCK);
                 }
                 if (connfd >= MAX_CONN) {
                     close(connfd);
@@ -510,6 +539,8 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
 				} else if (ret > 0) {
 #if 1
+                    //int current_time=now_ms();
+
                     connection_t *conn2 = &p_conn_list[result.fd];
                     int fd=result.fd;
                     int ms_flag=0;
@@ -893,6 +924,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         }
                     }
 #endif 
+
 				}
 			}  else if (result.event == EVENT_WRITE) {
   //
