@@ -557,7 +557,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                                     offset=0;
                                     continue;
                                 }else{
-                                    printf("[proactor] protocol error: missing '@' in header, fd=%d, rlength=%d\n", fd, *rlen);
+                                   // printf("[proactor] protocol error: missing '@' in header, fd=%d, rlength=%d\n", fd, *rlen);
                                     *rlen=0;
                                     printf("buffer:");
                                     print_visible(buffer);
@@ -576,7 +576,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                             if(*rlen<=0) break;//没有数据体
                             if(type==TYPE_DATA){//处理数据帧
                                 if(buffer[head_len]!='#'){
-                                    printf("[proactor] protocol error: data packet does not start with '#', fd=%d, rlength=%d\n", fd, *rlen);
+                                    //printf("[proactor] protocol error: data packet does not start with '#', fd=%d, rlength=%d\n", fd, *rlen);
                                     //数据帧数据缺失，丢弃该包，寻找下一个包
                                     char *p=memchr(buffer+head_len,'@',*rlen - head_len);//寻找header起始位置
                                     if(p){
@@ -709,9 +709,9 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         //printf("after process remain len:%d\n",conn2->rlength);
                         conn2->rbuffer[conn2->rlength]='\0';
                         if(conn2->rlength>0){
-                            printf("remain buffer:");
-                            print_visible(conn2->rbuffer);
-                            printf("\n");
+                           // printf("remain buffer:");
+                           // print_visible(conn2->rbuffer);
+                           // printf("\n");
                         }
                         if (avail_after > 0) {
                             if (!conn2->recv_pending) {
@@ -828,7 +828,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                     remove_client_fd(result.fd);
                     continue;
                 }else{
-                    fprintf(stderr, "[proactor] write error on fd %d: %s\n", result.fd, strerror(-ret));
+                    //fprintf(stderr, "[proactor] write error on fd %d: %s\n", result.fd, strerror(-ret));
                     continue;
                 }
             }
