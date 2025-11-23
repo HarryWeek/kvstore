@@ -384,10 +384,12 @@ int set_event_accept(struct io_uring *ring, int sockfd, struct sockaddr *addr,
 void handler_ack(connection_t *conn,int msg_id,int fd){
     Node *curr=conn->send_queue_head;
     Node *prev=NULL;
-    if(msg_id==1){
-        curr=curr->next;
-        while(curr!=NULL){
-            curr->expire_at=now_ms()+EXPIRE_TIME;
+    if(msg_id==1 && curr != NULL){
+        // 当收到msg_id=1的ACK时，重置后续所有消息的超时时间
+        Node *temp = curr->next;
+        while(temp != NULL){
+            temp->expire_at=now_ms()+EXPIRE_TIME;
+            temp = temp->next;
         }
     }
     curr=conn->send_queue_head;
@@ -528,21 +530,24 @@ int proactor_start(unsigned short port, msg_handler handler) {
 
 		io_uring_submit(&ring);
 
-        int curr_ms=now_ms();
-        if(curr_ms-old_time>=1000){
-            //每秒检查一次重传
-            printf("[proactor] Checking retransmissions...\n");
-            old_time=curr_ms;;
-            for(int i=0;i<client_count;i++){
-                int fd=client_fds[i];
-                check_retransmit(fd);
-            }
-        }
-		struct io_uring_cqe *cqe;
-		io_uring_wait_cqe(&ring, &cqe);
 
+		// 使用peek_batch_cqe非阻塞地获取完成事件
+         struct io_uring_cqe *cqe;
+        io_uring_wait_cqe(&ring, &cqe);
 		struct io_uring_cqe *cqes[128];
-		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);  // epoll_wait
+		int nready = io_uring_peek_batch_cqe(&ring, cqes, 128);
+		
+		// // 如果没有完成事件，等待一个事件（避免CPU空转）
+		// if (nready == 0) {
+		//     struct io_uring_cqe *cqe;
+		//     io_uring_wait_cqe(&ring, &cqe);
+		//     // 将等待的cqe添加到批处理数组中
+		//     cqes[0] = cqe;
+		//     nready = 1;
+		//     // 等待后可能还有更多完成事件，再次peek获取
+		//     int more = io_uring_peek_batch_cqe(&ring, cqes + 1, 127);
+		//     nready += more;
+		// }
         //printf("nready:%d\n",nready);
 		int i = 0;
 		for (i = 0;i < nready;i ++) {
@@ -929,7 +934,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         // 立即批量发送所有待发送的ack消息（在kvs_handler之前，避免被阻塞）
                         ack_msg_t *ack_curr = conn2->ack_queue_head;
                         while(ack_curr != NULL){
-                            printf("[proactor] sending ACK to fd=%d: %s\n", fd, ack_curr->msg);
+                            //printf("[proactor] sending ACK to fd=%d: %s\n", fd, ack_curr->msg);
                             set_event_send(&ring, fd, ack_curr->msg, strlen(ack_curr->msg), 0);
                             ack_curr = ack_curr->next;
                         }
@@ -1102,7 +1107,16 @@ int proactor_start(unsigned short port, msg_handler handler) {
 		}
 
 		io_uring_cq_advance(&ring, nready);
-        
+        int curr_ms=now_ms();
+        if(curr_ms-old_time>=1000){
+            //每秒检查一次重传
+            printf("[proactor] Checking retransmissions...\n");
+            old_time=curr_ms;;
+            for(int i=0;i<client_count;i++){
+                int fd=client_fds[i];
+                check_retransmit(fd);
+            }
+        }
 	}
 
 }
