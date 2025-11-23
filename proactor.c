@@ -96,7 +96,12 @@ static void cleanup_connection(int fd) {
     
     // 清理ack队列
     ack_msg_t *ack_curr = conn->ack_queue_head;
+    int ack_loop_count = 0;
     while(ack_curr != NULL){
+        if(++ack_loop_count > 1000){
+            printf("[DEBUG] cleanup_connection: ack queue loop count exceeded 1000, possible infinite loop! fd=%d\n", fd);
+            break;
+        }
         ack_msg_t *ack_next = ack_curr->next;
         kvs_free(ack_curr->msg);
         kvs_free(ack_curr);
@@ -107,7 +112,12 @@ static void cleanup_connection(int fd) {
     
     // 清理send队列
     Node *node_curr = conn->send_queue_head;
+    int node_loop_count = 0;
     while(node_curr != NULL){
+        if(++node_loop_count > 1000){
+            printf("[DEBUG] cleanup_connection: send queue loop count exceeded 1000, possible infinite loop! fd=%d\n", fd);
+            break;
+        }
         Node *node_next = node_curr->next;
         kvs_free(node_curr->msg);
         kvs_free(node_curr);
@@ -393,7 +403,12 @@ void handler_ack(connection_t *conn,int msg_id,int fd){
     //     }
     // }
     curr=conn->send_queue_head;
+    int handler_ack_loop_count = 0;
     while(curr!=NULL){
+        if(++handler_ack_loop_count > 1000){
+            // printf("[DEBUG] handler_ack: loop count exceeded 1000, possible infinite loop! fd=%d, msg_id=%d\n", fd, msg_id);
+            // break;
+        }
         if(curr->msg_id==msg_id){
             printf("[proactor] Received ACK for msg_id=%d from fd=%d\n", msg_id, fd);
             //仅删除该节点
@@ -435,7 +450,12 @@ void check_retransmit(int fd){
     // }
     uint64_t now=now_ms();
     Node *curr=conn->send_queue_head;
+    int retransmit_loop_count = 0;
     while(curr!=NULL){
+        if(++retransmit_loop_count > 1000){
+            // printf("[DEBUG] check_retransmit: loop count exceeded 1000, possible infinite loop! fd=%d\n", fd);
+            // break;
+        }
         if(now>=curr->expire_at){
             //超时，重传
             printf("now:%llu, expire_at:%llu\n", (unsigned long long)now, (unsigned long long)curr->expire_at);
@@ -754,7 +774,12 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         // printf("get buffer:");
                         // print_visible(buffer);
                         // printf("\n");
+                        int packet_parse_loop_count = 0;
                         while(1){
+                            if(++packet_parse_loop_count > 1000){
+                                printf("[DEBUG] packet parse: loop count exceeded 1000, possible infinite loop! fd=%d, rlen=%d, offset=%d\n", fd, *rlen, offset);
+                                break;
+                            }
                             if(*rlen-offset<6) break;//缺少header
                             if(buffer[offset]!='@'){
                                 char *p=memchr(buffer+offset,'@',*rlen - offset);//寻找header起始位置
@@ -955,7 +980,12 @@ int proactor_start(unsigned short port, msg_handler handler) {
                         }
                         // 立即批量发送所有待发送的ack消息（在kvs_handler之前，避免被阻塞）
                         ack_msg_t *ack_curr = conn2->ack_queue_head;
+                        int ack_send_loop_count = 0;
                         while(ack_curr != NULL){
+                            if(++ack_send_loop_count > 1000){
+                                printf("[DEBUG] ack send: loop count exceeded 1000, possible infinite loop! fd=%d\n", fd);
+                                break;
+                            }
                             //printf("[proactor] sending ACK to fd=%d: %s\n", fd, ack_curr->msg);
                             set_event_send(&ring, fd, ack_curr->msg, strlen(ack_curr->msg), 0);
                             ack_curr = ack_curr->next;
