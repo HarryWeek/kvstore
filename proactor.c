@@ -16,7 +16,7 @@
 #define ENTRIES_LENGTH		1024
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
-#define EXPIRE_TIME 3000  // 重传超时时间，单位毫秒
+#define EXPIRE_TIME 6000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
 #if ENABLE_MS
@@ -130,6 +130,7 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_head->expire_at=now_ms()+EXPIRE_TIME;
             c->send_queue_head->retry_count=0;
             c->send_queue_tail=c->send_queue_head;
+            //c->msg_id++;
             c->queue_size=1;
         }else{
             c->send_queue_tail->next=(Node*)kvs_malloc(sizeof(Node));
@@ -138,6 +139,7 @@ int proactor_broadcast( char *msg, size_t len) {
             c->send_queue_tail->next=NULL;
             c->send_queue_tail->expire_at=now_ms()+EXPIRE_TIME;
             c->send_queue_tail->retry_count=0;
+            //c->msg_id++;
             c->queue_size++;
         }
         set_event_send(&ring, fd,packet, strlen(packet), 0);
@@ -274,6 +276,7 @@ int set_event_send(struct io_uring *ring, int sockfd,
 	};
 	
 	io_uring_prep_send(sqe, sockfd, buf, len, flags);
+    io_uring_sqe_set_flags(sqe, IOSQE_ASYNC);
 	memcpy(&sqe->user_data, &accept_info, sizeof(struct conn_info));
 	// int ret = io_uring_submit(ring);
     // if (ret < 0) {
@@ -352,6 +355,7 @@ void check_retransmit(int fd){
         if(now>=curr->expire_at){
             //超时，重传
             set_event_send(&ring, fd, curr->msg, strlen(curr->msg), 0);
+            io_uring_submit(&ring);
             curr->expire_at=now+EXPIRE_TIME*(curr->retry_count+1); //指数退避
             curr->retry_count++;
             printf("[proactor] retransmit msg_id=%d to fd=%d, retry_count=%d\n", curr->msg_id, fd, curr->retry_count);
@@ -453,7 +457,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
 			struct io_uring_cqe *entries = cqes[i];
 			struct conn_info result;
 			memcpy(&result, &entries->user_data, sizeof(struct conn_info));
-
+            check_retransmit(result.fd);
 			if (result.event == EVENT_ACCEPT) {
 
                 if (set_event_accept(&ring, sockfd, (struct sockaddr*)&clientaddr, &len, 0) < 0) {
@@ -930,7 +934,7 @@ int proactor_start(unsigned short port, msg_handler handler) {
             }
 				
 			}
-            check_retransmit(result.fd);
+            
 			
 		}
 
