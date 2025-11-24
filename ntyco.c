@@ -49,8 +49,8 @@ void server_reader(void *arg) {
 			rlength += ret;
 			//printf("syncc:%s\n", syncc);
 			if (rlength == (int)strlen(syncc) && memcmp(rbuffer, syncc, rlength) == 0) {
-				printf("get SYNC fd:%d\n", fd);
-				printf("get msg:%.*s\n", rlength, rbuffer);
+				// printf("get SYNC fd:%d\n", fd);
+				// printf("get msg:%.*s\n", rlength, rbuffer);
 				add_client_fd(fd);
 				// consume the sync message
 				//rlength = 0;
