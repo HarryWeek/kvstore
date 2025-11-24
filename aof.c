@@ -57,7 +57,7 @@ int kvs_aof_write(char *cmd,char *key,char *value){
     else
         fprintf(aof_fp, "%s %s\n", cmd, key);
     // 可以按需决定是否立即刷新：
-    // fflush(aof_fp);
+    fflush(aof_fp);
     AOF_PRINT("AOF write: %s %s %s\n", cmd, key, value);
     return 0;
 }

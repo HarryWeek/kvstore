@@ -60,9 +60,9 @@ void server_reader(void *arg) {
 			// 处理可能有多个完整包的缓冲区
 			while (1) {
 				int before_len = rlength;
-				printf("get msg:%.*s\n", rlength, rbuffer);
+				//printf("get msg:%.*s\n", rlength, rbuffer);
 				char *packet = parse_packet(rbuffer, &rlength, BUFFER_LENGTH);
-				printf("packet parsed, length: %d\n", before_len - rlength);
+				//printf("packet parsed, length: %d\n", before_len - rlength);
 				if (!packet) break; // 不完整包
 				
 				int packet_len = before_len - rlength;
