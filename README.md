@@ -114,7 +114,9 @@
 
 - 测试格式
 
-> testcase <ip> <port> <datatype> <op> <count>
+> ```c
+>  testcase <ip> <port> <datatype> <op> <count>
+> ```
 >
 > 例： ./testcase 192.168.10.15 2000 array set 10000 测试array set 1万次
 >
