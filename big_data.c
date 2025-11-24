@@ -2,7 +2,7 @@
 int kvs_large_set(char *key, char *value) {
     if (!key || !value) return -1;
     if (kvs_large_exist(key) == 0) {
-        printf("[LARGE_SET] key=%s exist\n", key);
+        //printf("[LARGE_SET] key=%s exist\n", key);
         return 1;
     }    
     FILE *data_fp = fopen(VALUE_DATA_FILE, "ab+");

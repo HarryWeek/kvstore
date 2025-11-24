@@ -18,7 +18,7 @@
 #define ENTRIES_LENGTH		4096
 #define BUFFER_LENGTH		1024
 #define MAX_CONN 65535
-#define EXPIRE_TIME 90000  // 重传超时时间，单位毫秒
+#define EXPIRE_TIME 9000  // 重传超时时间，单位毫秒
 extern int kvs_protocol(char *msg, int length, char *response);
 extern int kvs_ms_protocol(char *msg, int len,char*response);
 void check_retransmit(int fd);

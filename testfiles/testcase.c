@@ -7,8 +7,20 @@
 
 #define MAX_MSG_LENGTH 4096
 #define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
-
+void print_visible(char *msg) {
+    for (char *p = msg; *p; p++) {
+        if (*p == '\r') {
+            printf("\\r");
+        } else if (*p == '\n') {
+            printf("\\n");
+        } else {
+            putchar(*p);
+        }
+    }
+}
 int send_msg(int connfd, char *msg, int length) {
+    // print_visible(msg);
+    // printf("\n");
     int res = send(connfd, msg, length, 0);
     if (res < 0) {
         perror("send");
@@ -47,7 +59,7 @@ int kvs_join_tokens(char *tokens[], int count, char *msg) {
     out += sprintf(out, "#%d\r\n", resp_len);
     memcpy(out, resp_buf, resp_len);
     out += resp_len;
-
+    
     *out = '\0';
     return out - msg;
 }
