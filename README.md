@@ -6,7 +6,7 @@
 
  KVStore 是一个使用 C 语言编写的高性能键值数据库，定位于学习与实验场景。项目提供数组、红黑树、哈希等多种内存索引，包含“SET、GET、MOD、EXIST、DEL”五种操作，并可选择大 Value 外存管理，适合评估不同数据结构的延迟与内存占用。
 
-网络层采用reactor网络模型用以支持高并发场景，同时支持主从同步以及RDB和AOF两种持久化方式，可完整走通“写入-持久化-复制”链路，配合 kvs-client 和 testfiles 进行功能/压力测试。
+网络层采用reactor网络模型和ntyco协程网络模型用以支持高并发场景，同时支持主从同步以及RDB和AOF两种持久化方式，可完整走通“写入-持久化-复制”链路，配合 kvs-client 和 testfiles 进行功能/压力测试。
 
 ## 目录结构
 
@@ -25,7 +25,7 @@
 
 - 数据结构：数组，红黑树，哈希表
 
-- 网络模型：reactor
+- 网络模型：reactor，ntyco协程
 
 - 数据帧协议：
 
@@ -34,6 +34,8 @@
   > 例：
   >
   > #43\r\n*3\r\n$3\r\nSET\r\n$9\r\narray_K_0\r\n$9\r\narray_V_0\r\n
+  >
+  > 只接收符合格式的命令，过滤所有非法命令
 
 - 功能： 
 
@@ -101,7 +103,21 @@
 
 ### 配置
 
-在kvstore.conf中选择是否开启RDB和AOF
+- 配置文件：kvstore.conf
+- 网络模型：reactor 或者ntyco
+- 持久化：RDB、AOF
+
+### 编译与清除编译文件
+
+``` c
+make
+```
+
+```c
+make clean
+```
+
+
 
 ### 启动示例
 
@@ -125,7 +141,7 @@
 > Running array  set     count=10000
 > array set -> 10000 ops, 597 ms, qps = 16750
 
-- 测试结果（单位：qps，数据量：100,000）
+- 测试结果（网络：reactor 单位：qps，数据量：100,000）
 
 
 ![array](pics/array.png)
